@@ -59,8 +59,14 @@ Namen.
 
 ## Stand
 
-M0 (Fundament) und M1 (HTTP-Zugang) stehen und sind getestet. Alles
-Weitere steht in [ROADMAP.md](ROADMAP.md). Wer mitarbeitet:
+M0 (Fundament), M1 (HTTP-Zugang) und M2 (Home-Assistant-Geruest)
+stehen und sind getestet. Einrichten in Home Assistant: Integration
+hinzufuegen, Host der GitLab-Instanz angeben (ein eingefuegter Link
+wird auf den Host gekuerzt), optional einen Lesetoken -- der Dialog
+prueft die Verbindung und meldet sich verstaendlich, wenn sie nicht
+kommt. Mehrere Instanzen nebeneinander sind moeglich, der Abstand des
+Herzschlags ist pro Eintrag einstellbar. Alles Weitere steht in
+[ROADMAP.md](ROADMAP.md). Wer mitarbeitet:
 [MITARBEIT.md](MITARBEIT.md). Warum es so geschnitten ist:
 [ARCHITEKTUR.md](ARCHITEKTUR.md).
 
@@ -76,19 +82,32 @@ hacs_lab/core/            reines Python, ohne Home Assistant, ohne Netz testbar
   entdeckung.py           Topic -> Kandidat -> Pruefung
 hacs_lab/http_aiohttp.py  der HTTP-Zugang, auf einer hereingereichten
                            aiohttp-Sitzung (importiert sie nicht)
-custom_components/hacs_lab/   die duenne Home-Assistant-Schicht (ab M2)
+custom_components/hacs_lab/   die duenne Home-Assistant-Schicht
+  manifest.json           Domain, Version, Konfigurationsdialog
+  __init__.py             richten und abmelden: Sitzung, Forge,
+                         Ablage, Herzschlag (DataUpdateCoordinator)
+  config_flow.py          Einrichtungsdialog mit Pruefverbindung
+  ablage.py               Speicher Version 1 mit Migrationsfunktion
+  const.py                Namen, Normalisierung, Speicherschluessel
+  strings.json, translations/  Texte fuer den Dialog
 tests/                    pytest, keine Netzanfrage
 tests/aufzeichnungen/    aufgezeichnete Koerper echter Antworten
+tests_ha/                 Home-Assistant-Bahn: Einrichtungsdialog,
+                         Herzschlag, Ablage -- offline auf der Attrappe
 ```
 
 ## Tests
 
+Zwei Bahnen, ein Befund: der Kern laeuft schlank, das Geruest braucht
+Home Assistant (Python 3.13, requirements-ha.txt).
+
 ```bash
-python -m pytest -q
+python -m pytest -q                       # Kern: ohne HA, ohne Netz
+python -m pytest tests_ha -q -p pytest_homeassistant_custom_component
 ```
 
 Unter Windows davor `PYTHONUTF8=1` setzen, sonst melden heile Tests
-Fehler, die es nicht gibt.
+Fehler, die es gibt, nicht.
 
 ## Fuer Repository-Besitzer
 

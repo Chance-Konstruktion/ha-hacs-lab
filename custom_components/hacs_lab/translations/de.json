@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HACS*lab mit einer GitLab-Instanz verbinden",
+        "description": "Adresse der GitLab-Instanz. Der Host genuegt; ein eingefuegter Link wird darauf gekuerzt. Oeffentliche Instanzen wie gitlab.com kommen ohne Token aus, eigene brauchen meist eins mit Leserecht.",
+        "data": {
+          "host": "Host der GitLab-Instanz",
+          "token": "Zugangs-Token mit Leserecht (optional)"
+        }
+      }
+    },
+    "error": {
+      "token_reicht_nicht": "Token fehlt oder reicht nicht — {grund}",
+      "verbindung_fehlgeschlagen": "Verbindung fehlgeschlagen — {grund}",
+      "host_nicht_erreichbar": "Instanz nicht erreichbar — {grund}",
+      "host_leer": "Bitte einen Host angeben"
+    },
+    "abort": {
+      "already_configured": "Diese Instanz ist bereits eingerichtet"
+    },
+    "create_entry": {
+      "verbunden": "Mit {host} verbunden — {anzahl} Projekte tragen das Topic hacs"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "abstand_minuten": "Abstand zwischen den Abfragen, in Minuten"
+        }
+      }
+    }
+  }
+}

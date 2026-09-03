@@ -57,7 +57,7 @@ Netzanfrage in der CI). Zusaetzlich ein Handlauf gegen
 
 ---
 
-## M2 -- Home-Assistant-Geruest
+## M2 -- Home-Assistant-Geruest (erledigt)
 
 **Ziel:** Die Integration laesst sich installieren und einrichten.
 
