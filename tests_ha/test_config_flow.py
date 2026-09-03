@@ -3,13 +3,36 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.hacs_lab.const import CONF_HOST, CONF_TOKEN, DOMAIN
+from custom_components.hacs_lab.const import (
+    CONF_ABSTAND_MINUTEN,
+    CONF_HOST,
+    CONF_TOKEN,
+    DOMAIN,
+)
+from custom_components.hacs_lab.eintraege import (
+    CONF_ADRESSE,
+    CONF_DATEIEN_DEINSTALLIEREN,
+    CONF_ENTFERNEN,
+    CONF_KATEGORIE,
+)
 from tests.attrappe import Aufzeichnung, projekt
+
+#: Ein gespeicherter Eintrag, wie ihn Stufe M3 ablegt.
+EINTRAG = {
+    "provider": "gitlab",
+    "host": "gitlab.example.net",
+    "provider_id": "789012",
+    "full_name": "foo/bar",
+    "kategorie": "integration",
+    "hinzugefuegt_am": "2026-09-03T20:00:00+00:00",
+}
 
 
 def antwort(anzahl: int = 1) -> Aufzeichnung:
@@ -176,3 +199,302 @@ async def test_derselbe_host_nur_einmal(hass: HomeAssistant, sitzung_einpflanzen
 
     assert ergebnis["type"] is FlowResultType.ABORT
     assert ergebnis["reason"] == "already_configured"
+
+
+async def dialog_und_eintrag(
+    hass: HomeAssistant, sitzung_einpflanzen, aufzeichnungen: list[Aufzeichnung]
+):
+    """Richtet den Eintrag per Dialog und liefert ihn mit der Attrappe.
+
+    Alle Aufzeichnungen gehoeren in EINEN Aufruf: der Forge der Laufzeit
+    behaelt die Attrappe, die ihm beim Richten gereicht wurde.
+    """
+    attrappe = sitzung_einpflanzen(aufzeichnungen)
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    ergebnis = await hass.config_entries.flow.async_configure(
+        ergebnis["flow_id"],
+        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+    )
+    await hass.async_block_till_done()
+    mock = hass.config_entries.async_entries(DOMAIN)[0]
+    assert mock.state is ConfigEntryState.LOADED
+    return mock, attrappe
+
+
+async def menue_waehlen(hass: HomeAssistant, mock, wahl: str):
+    """Startet den Optionsfluss und waehlt einen Menuepunkt."""
+    ergebnis = await hass.config_entries.options.async_init(mock.entry_id)
+    assert ergebnis["type"] is FlowResultType.MENU
+    return await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {"next_step_id": wahl}
+    )
+
+
+def projekt_als_antwort(**felder) -> Aufzeichnung:
+    """Ein einzelnes Projekt, wie es die Projects-API liefert."""
+    return Aufzeichnung(text=json.dumps(projekt(**felder)), kopfzeilen={})
+
+
+# -- Nachschau zu #13: Leerpruefung VOR dem Verbindungsversuch ---------
+
+
+async def test_leerer_host_ohne_verbindung(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    attrappe = sitzung_einpflanzen([])
+
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    ergebnis = await hass.config_entries.flow.async_configure(
+        ergebnis["flow_id"], {CONF_HOST: "", CONF_TOKEN: ""}
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["errors"] == {"base": "host_leer"}
+    # Wichtig ist das NICHT-Geschehene: keine einzige Anfrage.
+    assert attrappe.abrufe == []
+
+
+# -- Optionsmenue ------------------------------------------------------
+
+
+async def test_options_menue_erscheint(hass: HomeAssistant, sitzung_einpflanzen) -> None:
+    mock, _ = await dialog_und_eintrag(hass, sitzung_einpflanzen, [antwort(), antwort()])
+
+    ergebnis = await hass.config_entries.options.async_init(mock.entry_id)
+
+    assert ergebnis["type"] is FlowResultType.MENU
+    assert ergebnis["step_id"] == "init"
+    assert set(ergebnis["menu_options"]) == {"abstand", "repository", "eintraege"}
+
+
+async def test_abstand_ueber_das_menue(hass: HomeAssistant, sitzung_einpflanzen) -> None:
+    # Dritte Antwort fuer den Fall, dass der Eintrag neu gerichtet wird.
+    mock, _ = await dialog_und_eintrag(
+        hass, sitzung_einpflanzen, [antwort(), antwort(), antwort()]
+    )
+
+    ergebnis = await menue_waehlen(hass, mock, "abstand")
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["step_id"] == "abstand"
+
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_ABSTAND_MINUTEN: 30}
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+    koordinator = hass.data[DOMAIN][mock.entry_id].koordinator
+    assert koordinator.update_interval == timedelta(minutes=30)
+
+
+# -- Repository hinzufuegen ---------------------------------------------
+
+
+async def test_repository_hinzufuegen(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage
+) -> None:
+    mock, attrappe = await dialog_und_eintrag(
+        hass,
+        sitzung_einpflanzen,
+        [antwort(), antwort(), projekt_als_antwort(), antwort()],
+    )
+
+    ergebnis = await menue_waehlen(hass, mock, "repository")
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["step_id"] == "repository"
+
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"],
+        {CONF_ADRESSE: "https://gitlab.example.net/foo/bar"},
+    )
+    await hass.async_block_till_done()
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["step_id"] == "kategorie"
+    assert ergebnis["description_placeholders"]["name"] == "foo/bar*lab"
+    # Der Blick ging durch die API, an das echte Projekt.
+    assert "foo%2Fbar" in attrappe.abrufe[2][0]
+
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_KATEGORIE: "integration"}
+    )
+    await hass.async_block_till_done()
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+
+    laufzeit = hass.data[DOMAIN][mock.entry_id]
+    assert len(laufzeit.eintraege) == 1
+    assert laufzeit.eintraege.alle()[0].anzeigename == "foo/bar*lab"
+    gespeichert = hass_storage["hacs_lab.gitlab_example_net"]["data"]["eintraege"]
+    assert gespeichert[0]["storage_key"] == "gitlab@gitlab.example.net:789012"
+    assert gespeichert[0]["kategorie"] == "integration"
+
+
+async def test_kategorie_vorbelegung_aus_topic(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    mock, _ = await dialog_und_eintrag(
+        hass,
+        sitzung_einpflanzen,
+        [antwort(), antwort(), projekt_als_antwort(topics=("hacs", "hacs-plugin"))],
+    )
+
+    ergebnis = await menue_waehlen(hass, mock, "repository")
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"],
+        {CONF_ADRESSE: "gitlab.example.net/foo/bar"},
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["step_id"] == "kategorie"
+    for feld in ergebnis["data_schema"].schema:
+        if feld.schema == CONF_KATEGORIE:
+            vorbelegung = feld.default() if callable(feld.default) else feld.default
+            assert vorbelegung == "plugin"
+
+
+async def test_falsche_adresse_wird_benannt(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    mock, attrappe = await dialog_und_eintrag(
+        hass, sitzung_einpflanzen, [antwort(), antwort()]
+    )
+
+    ergebnis = await menue_waehlen(hass, mock, "repository")
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_ADRESSE: "nur-text-ohne-pfad"}
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["step_id"] == "repository"
+    assert ergebnis["errors"] == {"base": "adresse_ungueltig"}
+    assert len(attrappe.abrufe) == 2
+
+
+async def test_anderer_host_wird_benannt(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    mock, attrappe = await dialog_und_eintrag(
+        hass, sitzung_einpflanzen, [antwort(), antwort()]
+    )
+
+    ergebnis = await menue_waehlen(hass, mock, "repository")
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_ADRESSE: "https://other.example.net/foo/bar"}
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["errors"] == {"base": "anderer_host"}
+    assert len(attrappe.abrufe) == 2
+
+
+async def test_nicht_gefunden_wird_benannt(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    nicht_da = Aufzeichnung(
+        status=404,
+        text=json.dumps({"message": "404 Project Not Found"}),
+        kopfzeilen={},
+    )
+    mock, _ = await dialog_und_eintrag(
+        hass, sitzung_einpflanzen, [antwort(), antwort(), nicht_da]
+    )
+
+    ergebnis = await menue_waehlen(hass, mock, "repository")
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_ADRESSE: "gitlab.example.net/foo/bar"}
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["errors"] == {"base": "nicht_gefunden"}
+
+
+async def test_doppeltes_repository_wird_abgewiesen(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage
+) -> None:
+    mock, _ = await dialog_und_eintrag(
+        hass,
+        sitzung_einpflanzen,
+        [antwort(), antwort(), projekt_als_antwort(), projekt_als_antwort()],
+    )
+    ergebnis = await menue_waehlen(hass, mock, "repository")
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_ADRESSE: "gitlab.example.net/foo/bar"}
+    )
+    await hass.async_block_till_done()
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_KATEGORIE: "integration"}
+    )
+    await hass.async_block_till_done()
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+
+    # Zweiter Anlauf mit derselben Adresse: abgewiesen, bevor angelegt wird.
+    ergebnis = await menue_waehlen(hass, mock, "repository")
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"], {CONF_ADRESSE: "https://gitlab.example.net/foo/bar*lab"}
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["errors"] == {"base": "bereits_vorhanden"}
+    laufzeit = hass.data[DOMAIN][mock.entry_id]
+    assert len(laufzeit.eintraege) == 1
+
+
+# -- Eintraege entfernen -------------------------------------------------
+
+
+async def test_repository_entfernen(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage
+) -> None:
+    hass_storage["hacs_lab.gitlab_example_net"] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": "hacs_lab.gitlab_example_net",
+        "data": {"eintraege": [dict(EINTRAG)]},
+    }
+    sitzung_einpflanzen([antwort(), antwort()])
+    mock = MockConfigEntry(
+        domain=DOMAIN,
+        title="gitlab.example.net",
+        data={CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        unique_id="gitlab.example.net",
+    )
+    mock.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock.entry_id)
+    await hass.async_block_till_done()
+
+    ergebnis = await menue_waehlen(hass, mock, "eintraege")
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["step_id"] == "eintraege"
+    assert "foo/bar*lab (integration)" in ergebnis["description_placeholders"]["liste"]
+
+    ergebnis = await hass.config_entries.options.async_configure(
+        ergebnis["flow_id"],
+        {
+            CONF_ENTFERNEN: "gitlab@gitlab.example.net:789012",
+            CONF_DATEIEN_DEINSTALLIEREN: True,
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+    assert len(hass.data[DOMAIN][mock.entry_id].eintraege) == 0
+    assert hass_storage["hacs_lab.gitlab_example_net"]["data"]["eintraege"] == []
+
+
+async def test_entfernen_ohne_eintraege_bricht_ab(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    mock, _ = await dialog_und_eintrag(hass, sitzung_einpflanzen, [antwort(), antwort()])
+
+    ergebnis = await menue_waehlen(hass, mock, "eintraege")
+
+    assert ergebnis["type"] is FlowResultType.ABORT
+    assert ergebnis["reason"] == "liste_leer"

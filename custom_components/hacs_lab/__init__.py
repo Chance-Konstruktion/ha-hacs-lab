@@ -51,6 +51,7 @@ from .const import (
     STANDARD_ABSTAND_MINUTEN,
     ablage_schluessel,
 )
+from .eintraege import Eintraege
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -97,11 +98,17 @@ class HacsLabKoordinator(DataUpdateCoordinator[dict[str, int | str]]):
 
 @dataclass
 class Laufzeit:
-    """Was ein eingerichteter Eintrag im Arbeitsspeicher braucht."""
+    """Was ein eingerichteter Eintrag im Arbeitsspeicher braucht.
+
+    Seit Stufe M3 gehoert die Liste der Custom Repositories dazu: sie
+    wird beim Richten aus der Ablage gelesen und bleibt fuer den
+    Optionsdialog greifbar.
+    """
 
     forge: GitLabForge
     koordinator: HacsLabKoordinator
     ablage: Ablage
+    eintraege: Eintraege
 
 
 async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
@@ -119,13 +126,16 @@ async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
     ablage = Ablage(
         Store(hass, ABLAGE_VERSION, ablage_schluessel(eintrag.data[CONF_HOST]))
     )
-    await ablage.laden()
+    # Geladen und gleich gehalten: Frueher verfiel das Ergebnis hier,
+    # die Liste der Eintraege blieb unlesbar -- seit Stufe M3 gehoert
+    # sie in die Laufzeit (Nachschau zu #13).
+    eintraege = await Eintraege.aus_ablage(ablage)
 
     koordinator = HacsLabKoordinator(hass, eintrag, forge)
     await koordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[eintrag.entry_id] = Laufzeit(
-        forge=forge, koordinator=koordinator, ablage=ablage
+        forge=forge, koordinator=koordinator, ablage=ablage, eintraege=eintraege
     )
     eintrag.async_on_unload(eintrag.add_update_listener(_abstand_geaendert))
     _LOGGER.info("HACS*lab eingerichtet fuer %s", forge.host)
