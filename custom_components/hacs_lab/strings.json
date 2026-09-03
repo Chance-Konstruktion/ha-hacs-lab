@@ -26,10 +26,54 @@
   "options": {
     "step": {
       "init": {
+        "menu_options": {
+          "abstand": "Heartbeat interval",
+          "repository": "Add a custom repository",
+          "eintraege": "Watched repositories"
+        }
+      },
+      "abstand": {
+        "title": "Heartbeat interval",
         "data": {
           "abstand_minuten": "Interval between polls, in minutes"
         }
+      },
+      "repository": {
+        "title": "Add a custom repository",
+        "description": "Full address of the project, e.g. https://{host}/gruppe/projekt. The topic hacs is not required -- it only matters for discovery.",
+        "data": {
+          "adresse": "Address of the project"
+        }
+      },
+      "kategorie": {
+        "title": "Category of {name}",
+        "description": "{name} on {host}. Topics: {themen}",
+        "data": {
+          "kategorie": "Category of the repository"
+        }
+      },
+      "eintraege": {
+        "title": "Watched repositories",
+        "description": "Currently watched:\n{liste}",
+        "data": {
+          "entfernen": "Repository to remove",
+          "dateien_deinstallieren": "Also remove installed files (from stage M4)"
+        }
       }
+    },
+    "error": {
+      "adresse_ungueltig": "Not a complete repository address -- {grund}",
+      "anderer_host": "This entry watches {eigener}; the address points to {host}. Set up that instance as its own entry.",
+      "nicht_gefunden": "No project there -- {grund}",
+      "verbindung_fehlgeschlagen": "Connection failed -- {grund}",
+      "host_nicht_erreichbar": "Instance unreachable -- {grund}",
+      "bereits_vorhanden": "Already watched -- {grund}",
+      "kategorie_unbekannt": "Unknown category -- {grund}",
+      "nicht_bereit": "The integration is not ready; try again shortly",
+      "nicht_mehr_da": "This repository was already removed"
+    },
+    "abort": {
+      "liste_leer": "No repositories are being watched yet"
     }
   }
 }
