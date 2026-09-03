@@ -48,10 +48,13 @@ tests:
 # Installation wiegt ein paar Minuten. Kern und Waechter bleiben
 # schlank; dieses File hier (requirements-ha.txt) ist der einzige
 # Ort, an dem beide Pakete zusammengehoeren.
+# Das VOLLE python:3.13-Image ist Absicht: slim hat keinen gcc, und
+# lru-dict (Home-Assistant-Abhaengigkeit, C-Erweiterung) baut sonst
+# nicht -- derselbe Sturz wie einst im alten hacs-lab (Flug 0643 dort).
 tests-homeassistant:
   <<: *ueberall
   stage: test
-  image: python:3.13-slim
+  image: python:3.13
   variables:
     PYTHONUTF8: "1"
   before_script:
