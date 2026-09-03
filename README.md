@@ -39,15 +39,15 @@ Ein Repository wird nicht ueber seinen Namen identifiziert, sondern
 ueber **Anbieter + Host + Anbieter-ID**. Der Name ist Anzeige.
 
 ```
-GitHub                       GitLab
-------                       ------
-foo/bar                      foo/bar*lab
-uid: github:123456           uid: gitlab:789012
-full_name: foo/bar           full_name: foo/bar
-provider: github             provider: gitlab
+GitHub                       GitLab                       Forgejo
+------                       ------                       -------
+foo/bar                      foo/bar*lab                  foo/bar*forge
+uid: github:123456           uid: gitlab:789012           uid: forgejo:1678556
+full_name: foo/bar           full_name: foo/bar           full_name: foo/bar
+provider: github             provider: gitlab             provider: forgejo
 ```
 
-Damit sind das zwei vollstaendig verschiedene Eintraege, die
+Damit sind das vollstaendig verschiedene Eintraege, die
 nebeneinander installiert sein duerfen. Das Suffix erzeugt
 **ausschliesslich HACS*lab**; im GitLab wird nichts umbenannt, die
 echte Adresse bleibt `https://gitlab.example.net/foo/bar`.
@@ -59,8 +59,11 @@ Namen.
 
 ## Stand
 
-M0 (Fundament), M1 (HTTP-Zugang) und M2 (Home-Assistant-Geruest)
-stehen und sind getestet. Einrichten in Home Assistant: Integration
+M0 (Fundament), M1 (HTTP-Zugang), M2 (Home-Assistant-Geruest) und M4a
+(sicheres Entpacken) stehen und sind getestet. Als Anbieter tragen
+neben GitLab (M1) auch Forgejo (M9, Referenzinstanz Codeberg) -- dessen
+Abnahme laeuft gegen echte, bytegenaue Aufzeichnungen von codeberg.org.
+Einrichten in Home Assistant: Integration
 hinzufuegen, Host der GitLab-Instanz angeben (ein eingefuegter Link
 wird auf den Host gekuerzt), optional einen Lesetoken -- der Dialog
 prueft die Verbindung und meldet sich verstaendlich, wenn sie nicht

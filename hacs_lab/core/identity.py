@@ -17,12 +17,16 @@ from dataclasses import dataclass
 
 GITHUB = "github"
 GITLAB = "gitlab"
+FORGEJO = "forgejo"
 
 #: Anzeige-Suffix je Anbieter. GitHub bleibt ohne Suffix, damit
-#: bestehende HACS-Anzeigen unveraendert aussehen.
+#: bestehende HACS-Anzeigen unveraendert aussehen. Forgejo traegt
+#: ``*forge`` -- vom Anbieternamen abgeleitet, in der Liste ebenso
+#: lesbar wie ``*lab`` und von ihm unterscheidbar.
 SUFFIX = {
     GITHUB: "",
     GITLAB: "*lab",
+    FORGEJO: "*forge",
 }
 
 

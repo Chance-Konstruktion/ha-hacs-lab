@@ -48,11 +48,13 @@ eine Abfrage geraet: `foo/bar*lab` existiert im GitLab nicht.
 
 `core/forge.py` beschreibt, was HACS*lab braucht: Stammdaten,
 Releases, eine Datei, eine Archiv-Adresse, eine Topic-Suche. Mehr
-nicht. `gitlab_forge.py` ist die erste Umsetzung, Forgejo ist als
-zweite vorgesehen (M9).
+nicht. `gitlab_forge.py` ist die erste Umsetzung, `forgejo_forge.py`
+(M9, Codeberg als Referenzinstanz) die zweite -- ohne dass der Ablauf,
+der Speicher oder die Oberfläche dazwischen etwas vom Anbieter wissen.
 
 Ein `if provider == "gitlab":` ausserhalb der Anbieterklassen gilt als
-Fehler. Das ist die Regel, an der spaeter M9 gemessen wird.
+Fehler. M9 hat die Probe bestanden: der dritte Anbieter ist eine
+weitere Klasse und sonst nichts.
 
 Der HTTP-Zugang wird hineingereicht (`HttpClient`), nicht importiert.
 Deshalb laeuft der ganze Kern in Tests ohne Netz, und Home Assistant
