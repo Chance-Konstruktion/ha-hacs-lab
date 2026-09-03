@@ -418,10 +418,31 @@ async def test_nicht_gefunden_wird_benannt(
 async def test_doppeltes_repository_wird_abgewiesen(
     hass: HomeAssistant, sitzung_einpflanzen, hass_storage
 ) -> None:
+    # Die fuenfte Aufzeichnung gehoert dem M5-Lauf: das Anlegen des
+    # Eintrags stoesst sofort eine Update-Runde an (update.py-Beobachter).
     mock, _ = await dialog_und_eintrag(
         hass,
         sitzung_einpflanzen,
-        [antwort(), antwort(), projekt_als_antwort(), projekt_als_antwort()],
+        [
+            antwort(),
+            antwort(),
+            projekt_als_antwort(),
+            Aufzeichnung(
+                text=json.dumps(
+                    [
+                        {
+                            "tag_name": "v1.0.0",
+                            "name": "Version v1.0.0",
+                            "description": "",
+                            "released_at": "2026-09-01",
+                            "assets": {},
+                        }
+                    ]
+                ),
+                kopfzeilen={},
+            ),
+            projekt_als_antwort(),
+        ],
     )
     ergebnis = await menue_waehlen(hass, mock, "repository")
     ergebnis = await hass.config_entries.options.async_configure(

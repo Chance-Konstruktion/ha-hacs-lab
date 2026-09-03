@@ -14,7 +14,7 @@ entscheidet die Schicht, die M4 mitbringt.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -167,6 +167,22 @@ class Eintraege:
     def __init__(self, ablage: Ablage) -> None:
         self._ablage = ablage
         self._liste: list[Eintrag] = []
+        self._beobachter: list[Callable[[str, Eintrag], None]] = []
+
+    def melde_aenderungen(self, beobachter: Callable[[str, Eintrag], None]) -> None:
+        """Laesst sich rufen, wenn die Liste waechst oder schrumpft.
+
+        Stufe M5: die Entities einer Wabe sollen erscheinen und
+        verschwinden, sobald jemand einen Eintrag anlegt oder loescht --
+        ohne dass die Integration neu geladen werden muss. Der Beobachter
+        wird im Ereigniskreis gerufen (alles hier ist eine Koroutine),
+        er muss selbst dafuer sorgen, dass er schnell zurueckkehrt.
+        """
+        self._beobachter.append(beobachter)
+
+    def _melden(self, art: str, eintrag: Eintrag) -> None:
+        for beobachter in self._beobachter:
+            beobachter(art, eintrag)
 
     @classmethod
     async def aus_ablage(cls, ablage: Ablage) -> Eintraege:
@@ -228,6 +244,7 @@ class Eintraege:
         )
         self._liste.append(eintrag)
         await self._sichern()
+        self._melden("hinzugefuegt", eintrag)
         return eintrag
 
     async def entfernen(self, storage_key: str) -> Eintrag:
@@ -242,9 +259,12 @@ class Eintraege:
             raise NichtVorhanden(storage_key)
         self._liste.remove(eintrag)
         await self._sichern()
+        self._melden("entfernt", eintrag)
         return eintrag
 
     async def _sichern(self) -> None:
-        await self._ablage.sichern(
-            {"eintraege": [eintrag.as_dict() for eintrag in self._liste]}
+        # sicher_teil statt sicher: die Ablage teilt sich seit Stufe M5
+        # mit dem Stand der Eintraege -- ein ganzer Ersatz wuerde ihn loeschen.
+        await self._ablage.sicher_teil(
+            "eintraege", [eintrag.as_dict() for eintrag in self._liste]
         )

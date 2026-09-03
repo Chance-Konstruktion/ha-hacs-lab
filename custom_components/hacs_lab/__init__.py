@@ -137,6 +137,11 @@ async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[eintrag.entry_id] = Laufzeit(
         forge=forge, koordinator=koordinator, ablage=ablage, eintraege=eintraege
     )
+    # Stufe M5: die Waben des Vorhabens -- eine update-Entity je Eintrag
+    # samt Vorab-Schalter. Erst nach dem Herzschlag: steht die Verbindung
+    # nicht, gibt es nichts zu beobachten, und der Eintrag meldet sich
+    # ohnehin als nicht bereit.
+    await hass.config_entries.async_forward_entry_setups(eintrag, ("update", "switch"))
     eintrag.async_on_unload(eintrag.add_update_listener(_abstand_geaendert))
     _LOGGER.info("HACS*lab eingerichtet fuer %s", forge.host)
     return True
@@ -145,9 +150,15 @@ async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
     """Eintrag abmelden. Die Sitzung gehoert Home Assistant und bleibt."""
     laufzeit: Laufzeit | None = hass.data.get(DOMAIN, {}).pop(eintrag.entry_id, None)
+    waben_entladen = await hass.config_entries.async_unload_platforms(
+        eintrag, ("update", "switch")
+    )
     if laufzeit is not None:
         await laufzeit.koordinator.async_shutdown()
-    return True
+        aktualisierer = getattr(laufzeit, "aktualisierer", None)
+        if aktualisierer is not None:
+            await aktualisierer.async_shutdown()
+    return waben_entladen
 
 
 async def _abstand_geaendert(hass: HomeAssistant, eintrag: ConfigEntry) -> None:

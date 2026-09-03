@@ -65,7 +65,7 @@ async def test_ablage_tragt_den_host_im_schluessel(
     assert "hacs_lab.gitlab_example_net" in hass_storage
     gespeichert = hass_storage["hacs_lab.gitlab_example_net"]
     assert gespeichert["version"] == 1
-    assert gespeichert["data"] == {"eintraege": []}
+    assert gespeichert["data"] == {"eintraege": [], "stand": {}}
 
 
 async def test_zwei_instanzen_nebeneinander(
@@ -102,7 +102,10 @@ async def test_ablage_wandelt_alte_form(
     sitzung_einpflanzen([antwort()])
     await richten(hass, eintrag())
 
-    assert hass_storage["hacs_lab.gitlab_example_net"]["data"] == {"eintraege": []}
+    assert hass_storage["hacs_lab.gitlab_example_net"]["data"] == {
+        "eintraege": [],
+        "stand": {},
+    }
 
 
 async def test_kaputte_instanz_meldet_wiederholung(

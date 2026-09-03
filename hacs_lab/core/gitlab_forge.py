@@ -78,6 +78,7 @@ class GitLabForge:
                 Release(
                     tag=tag,
                     name=eintrag.get("name") or tag,
+                    beschreibung=eintrag.get("description") or "",
                     veroeffentlicht_am=eintrag.get("released_at") or "",
                     vorabversion=bool(eintrag.get("upcoming_release")),
                     anhaenge=anhaenge,
@@ -105,6 +106,10 @@ class GitLabForge:
             + quote(ref, safe="")
         )
         return await self.http.get_bytes(url)
+
+    async def archiv(self, pfad: str, ref: str) -> bytes:
+        """Das Quell-Archiv einer Version -- Stufe M5, hinter der Naht."""
+        return await self.http.get_bytes(await self.archiv_url(pfad, ref))
 
     async def archiv_url(self, pfad: str, ref: str) -> str:
         return (
