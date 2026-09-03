@@ -25,6 +25,7 @@ class Release:
 
     tag: str
     name: str = ""
+    beschreibung: str = ""
     veroeffentlicht_am: str = ""
     vorabversion: bool = False
     anhaenge: dict[str, str] = field(default_factory=dict)
@@ -70,8 +71,23 @@ class Forge(Protocol):
     async def releases(self, pfad: str) -> list[Release]:
         """Veroeffentlichte Versionen, neueste zuerst."""
 
+    async def tags(self, pfad: str) -> list[str]:
+        """Tags als Rueckfallebene, wenn ein Projekt keine Releases pflegt.
+
+        Stufe M5: die Update-Erkennung greift darauf zurueck. Wer einen
+        Anbieter anbindet, liefert hier einfach die Tagnamen.
+        """
+
     async def datei(self, pfad: str, datei: str, ref: str) -> bytes:
         """Inhalt einer Datei auf einem Zweig oder Tag."""
+
+    async def archiv(self, pfad: str, ref: str) -> bytes:
+        """Das Quell-Archiv einer Version als Bytes.
+
+        Stufe M5: der Installations-Dienst der update-Entities holt hier
+        das Archiv -- die Adresse kennt nur der Anbieter, sie bleibt
+        hinter dieser Naht.
+        """
 
     async def archiv_url(self, pfad: str, ref: str) -> str:
         """Adresse des Quell-Archivs fuer eine Version."""
