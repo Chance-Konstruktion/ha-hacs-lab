@@ -1,0 +1,50 @@
+"""Konstanten der Home-Assistant-Schicht von HACS*lab."""
+
+from __future__ import annotations
+
+#: Domain der Integration -- Home Assistant verlangt sie hier, das
+#: Manifest nennt denselben Wert.
+DOMAIN = "hacs_lab"
+
+#: Einstellfelder des Einrichtungsdialogs.
+CONF_HOST = "host"
+CONF_TOKEN = "token"
+
+#: Option des Herzschlags: Abstand in Minuten (ROADMAP M2:
+#: "DataUpdateCoordinator mit einstellbarem Abstand").
+CONF_ABSTAND_MINUTEN = "abstand_minuten"
+
+#: Standardabstand des Herzschlags -- ein halber Tag. GitLab bemerkt
+#: das nicht, Menschen bekommen Updates am gleichen Tag noch mit.
+STANDARD_ABSTAND_MINUTEN = 720
+
+#: Version der Ablage (homeassistant.helpers.storage). Die 1 ist
+#: ernst gemeint: jede Form-Aenderung bekommt eine Migration und erst
+#: dann eine neue Zahl (siehe ablage.py).
+ABLAGE_VERSION = 1
+
+
+def host_normalisieren(host: str) -> str:
+    """Bringt jede Menscheneingabe auf die Form ``gitlab.example.net``.
+
+    Nebeneffekt mit Absicht: Wer den Link eines Projekts einfuegt
+    (``https://GitLab.Example.Net/gruppe/projekt``), bekommt daraus den
+    Host -- das Projekt selbst ist Stufe M3. Kleinschreibung, weil es
+    fuer Hosts egal ist, fuer Speicherschluessel aber nicht.
+    """
+    gereinigt = host.strip()
+    for praefix in ("https://", "http://"):
+        if gereinigt.startswith(praefix):
+            gereinigt = gereinigt[len(praefix) :]
+            break
+    return gereinigt.split("/", 1)[0].lower()
+
+
+def ablage_schluessel(host: str) -> str:
+    """Speicherschlüssel der Ablage für eine Instanz.
+
+    Der Host steckt drin, damit mehrere Instanzen nebeneinander
+    existieren (gitlab.com und die eigene) ohne sich zu verdraengen --
+    dieselbe Unterscheidung wie im storage_key des Kerns.
+    """
+    return DOMAIN + "." + host.replace(".", "_").replace(":", "_")

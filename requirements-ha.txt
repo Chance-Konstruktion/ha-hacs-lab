@@ -1,0 +1,10 @@
+# Die Home-Assistant-Bahn (Job tests-homeassistant, Python 3.13).
+#
+# Home Assistant 2025.2 verlangt Python 3.13 -- darum hat diese Bahn ein
+# eigenes Requirements-File und einen eigenen CI-Job. Die schlanke
+# Kern-Suite (tests/, requirements-dev.txt) bleibt davon unberuehrt.
+#
+# Die Versionen gehoeren zusammen: pytest-homeassistant-custom-component
+# ist auf genau diese Home-Assistant-Version abgestimmt.
+homeassistant==2026.2.3
+pytest-homeassistant-custom-component==0.13.316

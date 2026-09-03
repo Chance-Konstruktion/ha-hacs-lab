@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect HACS*lab to a GitLab instance",
+        "description": "Address of the GitLab instance. The host is enough; a pasted link is shortened to it. Public instances like gitlab.com work without a token, private ones usually need a read token.",
+        "data": {
+          "host": "Host of the GitLab instance",
+          "token": "Access token with read permission (optional)"
+        }
+      }
+    },
+    "error": {
+      "token_reicht_nicht": "Token missing or insufficient — {grund}",
+      "verbindung_fehlgeschlagen": "Connection failed — {grund}",
+      "host_nicht_erreichbar": "Instance unreachable — {grund}",
+      "host_leer": "Please state a host"
+    },
+    "abort": {
+      "already_configured": "This instance is already set up"
+    },
+    "create_entry": {
+      "verbunden": "Connected to {host} — {anzahl} projects carry the topic hacs"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "abstand_minuten": "Interval between polls, in minutes"
+        }
+      }
+    }
+  }
+}

@@ -43,6 +43,22 @@ tests:
   script:
     - python -m pytest -q
 
+# Die Home-Assistant-Bahn: eigene Umgebung, eigener Job. Der Grund
+# ist doppelt -- Home Assistant 2025.2 verlangt Python 3.13, und seine
+# Installation wiegt ein paar Minuten. Kern und Waechter bleiben
+# schlank; dieses File hier (requirements-ha.txt) ist der einzige
+# Ort, an dem beide Pakete zusammengehoeren.
+tests-homeassistant:
+  <<: *ueberall
+  stage: test
+  image: python:3.13-slim
+  variables:
+    PYTHONUTF8: "1"
+  before_script:
+    - pip install --quiet --disable-pip-version-check -r requirements-ha.txt
+  script:
+    - python -m pytest tests_ha -q -p pytest_homeassistant_custom_component
+
 # --------------------------------------------------------------------
 # Der Kern haengt nicht an Home Assistant. Das ist keine Stilfrage:
 # nur so bleiben die Tests schnell und ohne HA-Installation lauffaehig.
@@ -89,11 +105,11 @@ tests-ohne-netz:
   before_script: []
   script:
     - |
-      if grep -rnE "import (aiohttp|requests|httpx|socket|urllib)|requests\.(get|post)" tests/; then
+      if grep -rnE "import (aiohttp|requests|httpx|socket|urllib)|requests\.(get|post)" tests/ tests_ha/; then
         echo "FEHLER: Netzzugriff in den Tests"
         exit 1
       fi
-      if grep -rn "ipv64\.net" tests/; then
+      if grep -rn "ipv64\.net" tests/ tests_ha/; then
         echo "FEHLER: Privatinstanz in den Testdaten"
         exit 1
       fi
