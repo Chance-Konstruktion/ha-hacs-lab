@@ -59,9 +59,10 @@ Namen.
 
 ## Stand
 
-M0 (Fundament) steht und ist getestet. Alles Weitere steht in
-[ROADMAP.md](ROADMAP.md). Wer mitarbeitet: [MITARBEIT.md](MITARBEIT.md).
-Warum es so geschnitten ist: [ARCHITEKTUR.md](ARCHITEKTUR.md).
+M0 (Fundament) und M1 (HTTP-Zugang) stehen und sind getestet. Alles
+Weitere steht in [ROADMAP.md](ROADMAP.md). Wer mitarbeitet:
+[MITARBEIT.md](MITARBEIT.md). Warum es so geschnitten ist:
+[ARCHITEKTUR.md](ARCHITEKTUR.md).
 
 ## Aufbau
 
@@ -73,8 +74,11 @@ hacs_lab/core/            reines Python, ohne Home Assistant, ohne Netz testbar
   validierung.py          hacs.json, manifest.json
   versionen.py            Vergleich und Update-Entscheidung
   entdeckung.py           Topic -> Kandidat -> Pruefung
+hacs_lab/http_aiohttp.py  der HTTP-Zugang, auf einer hereingereichten
+                           aiohttp-Sitzung (importiert sie nicht)
 custom_components/hacs_lab/   die duenne Home-Assistant-Schicht (ab M2)
 tests/                    pytest, keine Netzanfrage
+tests/aufzeichnungen/    aufgezeichnete Koerper echter Antworten
 ```
 
 ## Tests
