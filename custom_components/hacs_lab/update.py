@@ -117,6 +117,11 @@ class HacsLabUpdateEntity(UpdateEntity):
 
     @property
     def available(self) -> bool:
+        # Stufe M8: ein Instanz-Ausfall macht die Entity unehrlich-verfuegbar,
+        # aber der letzte Fund bleibt im Koordinator -- alte Daten werden
+        # behalten, nicht geloescht, und kommen zurueck, sobald es wieder geht.
+        if not self._aktualisierer.last_update_success:
+            return False
         fund = self._fund
         return fund is None or fund.fehler is None
 

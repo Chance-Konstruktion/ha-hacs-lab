@@ -75,5 +75,19 @@
     "abort": {
       "liste_leer": "Noch keine Repositories in Beobachtung"
     }
+  },
+  "issues": {
+    "token_problem": {
+      "title": "Das Token von {host} funktioniert nicht mehr",
+      "description": "Die letzten Update-Läufe scheiterten an der Berechtigung. Prüfe das Token dieser GitLab-Instanz; HACS*lab versucht es von selbst weiter und räumt diese Meldung weg, sobald es wieder klappt."
+    },
+    "repo_verschwunden": {
+      "title": "Repository verschwunden: {name}",
+      "description": "Das GitLab meldet dieses Repository als weg. Grund: {grund}. Nimm es aus der Liste oder stelle das Projekt wieder her."
+    },
+    "repo_krank": {
+      "title": "Repository meldet Fehler: {name}",
+      "description": "Die Update-Prüfung schlägt für dieses Repository wiederholt fehl. Grund: {grund}. Andere Repositorys sind nicht betroffen."
+    }
   }
 }

@@ -75,5 +75,19 @@
     "abort": {
       "liste_leer": "No repositories are being watched yet"
     }
+  },
+  "issues": {
+    "token_problem": {
+      "title": "The token of {host} no longer works",
+      "description": "The last update runs failed with an authorization error. Check the token of this GitLab instance; HACS*lab retries on its own and clears this message when it succeeds again."
+    },
+    "repo_verschwunden": {
+      "title": "Repository disappeared: {name}",
+      "description": "The GitLab reports this repository as gone. Reason: {grund}. Remove it from the list, or restore the project."
+    },
+    "repo_krank": {
+      "title": "Repository reports errors: {name}",
+      "description": "The update check keeps failing for this repository. Reason: {grund}. Other repositories are unaffected."
+    }
   }
 }

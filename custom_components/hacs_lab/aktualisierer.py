@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry
+from homeassistant.helpers.issue_registry import IssueSeverity
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -49,6 +51,19 @@ if TYPE_CHECKING:
     from .eintraege import Eintraege
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _kennung(schluessel: str) -> str:
+    """Macht aus einem Speicherschluessel eine Issue-Kennung (a-z, 0-9, _)."""
+    gesaeubert = "".join(
+        zeichen if zeichen.isalnum() and zeichen.isascii() else "_"
+        for zeichen in schluessel.lower()
+    )
+    return gesaeubert.strip("_") or "eintrag"
+
+
+#: Wortbruchstuecke, die auf ein Token-Problem deuten (M1-Klartexte).
+_TOKEN_HINWEISE = ("token", "berechtigung", "401", "403")
 
 
 class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
@@ -101,6 +116,7 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
         try:
             funde = await lauf(self.forge, auftraege)
         except ForgeFehler as fehler:
+            self._melde_token_problem(str(fehler))
             raise UpdateFailed(str(fehler)) from fehler
         except Exception as fehler:
             raise UpdateFailed(f"unerwarteter Fehler: {fehler}") from fehler
@@ -111,8 +127,69 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
                 "Update-Pruefung gescheitert fuer %s: %s", fund.schluessel, fund.fehler
             )
         if fehlerfunde and len(fehlerfunde) == len(funde):
+            self._melde_token_problem(fehlerfunde[0].fehler or "")
             raise UpdateFailed(fehlerfunde[0].fehler or "alle Eintraege gescheitert")
+
+        self._reparaturen_ableiten(funde)
         return funde
+
+    def _melde_token_problem(self, grund: str) -> None:
+        """Stufe M8: ein Token-Problem ist eine Reparatur-Meldung wert.
+
+        Aufgeraeumt wird sie beim naechsten erfolgreichen Lauf --
+        :func:`_reparaturen_ableiten` loescht sie mit.
+        """
+        if not any(hinweis in grund.lower() for hinweis in _TOKEN_HINWEISE):
+            return
+        issue_registry.async_create_issue(
+            self.hass,
+            DOMAIN,
+            "token_problem",
+            is_fixable=False,
+            severity=IssueSeverity.WARNING,
+            translation_key="token_problem",
+            translation_placeholders={"host": self.forge.host},
+        )
+
+    def _reparaturen_ableiten(self, funde: dict[str, Fund]) -> None:
+        """Je Fund eine Reparatur-Spur: verschwunden, krank oder gesund.
+
+        Ein 404-Fund heisst verschwunden (geloesscht oder verschoben);
+        alles andere Fehlerhafte bekommt die allgemeine Meldung. Gesunde
+        Eintraege raeumen ihre Meldung weg -- ein Problem, das weg ist,
+        soll nicht auf dem Brett bleiben. Der erfolgreiche Lauf nimmt
+        auch das Token-Problem mit.
+        """
+        for schluessel, fund in funde.items():
+            kennung = _kennung(schluessel)
+            krank = "repo_krank_" + kennung
+            verschwunden = "repo_verschwunden_" + kennung
+            if fund.fehler is None:
+                issue_registry.async_delete_issue(self.hass, DOMAIN, krank)
+                issue_registry.async_delete_issue(self.hass, DOMAIN, verschwunden)
+            elif "nicht gefunden" in fund.fehler:
+                issue_registry.async_delete_issue(self.hass, DOMAIN, krank)
+                issue_registry.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    verschwunden,
+                    is_fixable=False,
+                    severity=IssueSeverity.WARNING,
+                    translation_key="repo_verschwunden",
+                    translation_placeholders={"name": schluessel, "grund": fund.fehler},
+                )
+            else:
+                issue_registry.async_delete_issue(self.hass, DOMAIN, verschwunden)
+                issue_registry.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    krank,
+                    is_fixable=False,
+                    severity=IssueSeverity.WARNING,
+                    translation_key="repo_krank",
+                    translation_placeholders={"name": schluessel, "grund": fund.fehler},
+                )
+        issue_registry.async_delete_issue(self.hass, DOMAIN, "token_problem")
 
 
 async def _takt_geaendert(hass: HomeAssistant, eintrag: ConfigEntry) -> None:
