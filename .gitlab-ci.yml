@@ -67,8 +67,11 @@ kein-anbieter-sonderpfad:
   before_script: []
   script:
     - |
-      treffer=$(grep -rn 'provider == "gitlab"\|provider == "github"' \
+      # Gesucht ist echter Code, keine Erwaehnung der Regel. Zeilen mit
+      # ``...`` sind Dokumentation und zaehlen nicht.
+      treffer=$(grep -rnE 'if .*provider *== *"(gitlab|github)"' \
         --include="*.py" hacs_lab/ custom_components/ \
+        | grep -v '``' \
         | grep -v "hacs_lab/core/gitlab_forge.py" || true)
       if [ -n "$treffer" ]; then
         echo "$treffer"
@@ -77,16 +80,21 @@ kein-anbieter-sonderpfad:
       fi
       echo "kein Sonderpfad gefunden"
 
-# In den Tests darf kein echter Host stehen. Sonst haengt die Pipeline
-# irgendwann am Netz -- und am schlechtesten Tag an einer Privatinstanz.
+# Kein Test darf ins Netz greifen, und die Privatinstanz hat in
+# Testdaten nichts verloren. Ein Hostname als reine Zeichenkette
+# ("gitlab.com") ist dagegen in Ordnung -- er ruft niemanden an.
 tests-ohne-netz:
   <<: *ueberall
   stage: grenzen
   before_script: []
   script:
     - |
-      if grep -rn "gitlab\.com\|ipv64\.net\|aiohttp\|requests\." tests/; then
-        echo "FEHLER: Netz oder echter Host in den Tests"
+      if grep -rnE "import (aiohttp|requests|httpx|socket|urllib)|requests\.(get|post)" tests/; then
+        echo "FEHLER: Netzzugriff in den Tests"
+        exit 1
+      fi
+      if grep -rn "ipv64\.net" tests/; then
+        echo "FEHLER: Privatinstanz in den Testdaten"
         exit 1
       fi
       echo "Tests bleiben trocken"
