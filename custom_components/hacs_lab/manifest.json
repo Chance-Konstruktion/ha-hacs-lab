@@ -1,0 +1,11 @@
+{
+  "domain": "hacs_lab",
+  "name": "HACS*lab",
+  "version": "0.0.0",
+  "documentation": "https://gitlab.schanz.ipv64.net/claude/hacs-lab",
+  "issue_tracker": "https://gitlab.schanz.ipv64.net/claude/hacs-lab/-/issues",
+  "codeowners": [],
+  "config_flow": false,
+  "iot_class": "cloud_polling",
+  "requirements": []
+}

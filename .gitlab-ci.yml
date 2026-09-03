@@ -1,0 +1,92 @@
+# Pipeline fuer HACS*lab.
+#
+# Zwei Dinge werden geprueft, die man leicht schleifen laesst:
+# der Kern muss ohne Home Assistant importierbar bleiben, und in den
+# Tests darf keine Netzanfrage stecken. Beides faellt sonst erst auf,
+# wenn es teuer ist.
+
+.ueberall: &ueberall
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+stages:
+  - form
+  - test
+  - grenzen
+
+default:
+  image: python:3.12-slim
+  before_script:
+    - pip install --quiet --disable-pip-version-check -r requirements-dev.txt
+
+# --------------------------------------------------------------------
+form:
+  <<: *ueberall
+  stage: form
+  script:
+    - ruff check .
+    - ruff format --check .
+
+tests:
+  <<: *ueberall
+  stage: test
+  variables:
+    PYTHONUTF8: "1"
+  script:
+    - python -m pytest -q
+
+# --------------------------------------------------------------------
+# Der Kern haengt nicht an Home Assistant. Das ist keine Stilfrage:
+# nur so bleiben die Tests schnell und ohne HA-Installation lauffaehig.
+kern-ohne-homeassistant:
+  <<: *ueberall
+  stage: grenzen
+  before_script: []
+  script:
+    - python -c "import hacs_lab.core.entdeckung, hacs_lab.core.gitlab_forge, hacs_lab.core.versionen; print('Kern importiert ohne Home Assistant')"
+    - |
+      if grep -rn "import homeassistant\|from homeassistant" hacs_lab/; then
+        echo "FEHLER: Home Assistant im Kern -- das gehoert nach custom_components/"
+        exit 1
+      fi
+      echo "kein Home-Assistant-Import im Kern"
+
+# Anbieterwissen gehoert hinter die Forge-Schnittstelle. Ein Sonderpfad
+# im Ablauf faellt hier auf, solange er noch billig zu entfernen ist.
+kein-anbieter-sonderpfad:
+  <<: *ueberall
+  stage: grenzen
+  before_script: []
+  script:
+    - |
+      treffer=$(grep -rn 'provider == "gitlab"\|provider == "github"' \
+        --include="*.py" hacs_lab/ custom_components/ \
+        | grep -v "hacs_lab/core/gitlab_forge.py" || true)
+      if [ -n "$treffer" ]; then
+        echo "$treffer"
+        echo "FEHLER: Anbieter-Sonderpfad ausserhalb der Anbieterklasse"
+        exit 1
+      fi
+      echo "kein Sonderpfad gefunden"
+
+# In den Tests darf kein echter Host stehen. Sonst haengt die Pipeline
+# irgendwann am Netz -- und am schlechtesten Tag an einer Privatinstanz.
+tests-ohne-netz:
+  <<: *ueberall
+  stage: grenzen
+  before_script: []
+  script:
+    - |
+      if grep -rn "gitlab\.com\|ipv64\.net\|aiohttp\|requests\." tests/; then
+        echo "FEHLER: Netz oder echter Host in den Tests"
+        exit 1
+      fi
+      echo "Tests bleiben trocken"
