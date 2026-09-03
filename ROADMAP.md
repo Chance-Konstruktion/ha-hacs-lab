@@ -35,7 +35,7 @@ Grundregeln, die fuer jede Stufe gelten:
 
 ---
 
-## M1 -- Echter HTTP-Zugang
+## M1 -- Echter HTTP-Zugang (erledigt)
 
 **Ziel:** Der Kern spricht mit einer echten GitLab-Instanz.
 
