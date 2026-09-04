@@ -21,10 +21,10 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.hacs_lab.ablage import migriere
 from custom_components.hacs_lab.const import CONF_HOST, CONF_TOKEN, DOMAIN
+from custom_components.hacs_lab.core.identity import RepositoryIdentity
 from custom_components.hacs_lab.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from hacs_lab.core.identity import RepositoryIdentity
 
 from .test_m5 import (
     SCHLUESSEL,

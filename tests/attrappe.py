@@ -1,56 +1,22 @@
-"""Eine HTTP-Attrappe: liefert vorbereitete Antworten, geht nie ins Netz."""
+"""Attrappen fuer beide Bahnen -- kernfrei, gemeinsam nutzbar.
+
+Diese Datei enthaelt nur Attrappen, die keinen Kern importieren:
+Die aiohttp-Sitzungs-Attrappe (``SitzungsAttrappe``) und die Antworthüllen
+(``Aufzeichnung``) laufen in der reinen Bahn UND in der Home-Assistant-
+Bahn -- in letzterer unter dem echten Kern-Namen, deshalb darf hier
+keine Kern-Klasse auftauchen (keine zweite Identitaet, siehe
+``tests/kern_laden.py``). Die Attrappe fuer den HTTP-Zugang des Kerns
+liegt dafuer in ``tests/attrappe_kern.py``.
+"""
 
 from __future__ import annotations
-
-import json
-
-from hacs_lab.core.forge import NichtGefunden
-
-
-class FakeHttp:
-    """Antworten werden ueber ein Praefix der URL zugeordnet."""
-
-    def __init__(self, json_antworten: dict | None = None, dateien: dict | None = None):
-        self.json_antworten = json_antworten or {}
-        self.dateien = dateien or {}
-        self.aufrufe: list[tuple[str, dict]] = []
-        self.seitenwuensche: list[int | None] = []
-
-    async def get_json(
-        self,
-        url: str,
-        params: dict | None = None,
-        *,
-        seiten: int | None = None,
-    ):
-        # ``seiten`` wird mit aufgezeichnet, damit ein Test belegen
-        # kann, dass eine Probe wirklich nur eine Seite anfordert.
-        self.aufrufe.append((url, params or {}))
-        self.seitenwuensche.append(seiten)
-        for schluessel, wert in self.json_antworten.items():
-            if schluessel in url:
-                return wert
-        return {"message": "404 Project Not Found"}
-
-    async def get_bytes(self, url: str) -> bytes:
-        self.aufrufe.append((url, {}))
-        for schluessel, wert in self.dateien.items():
-            if schluessel in url:
-                if isinstance(wert, bytes):
-                    return wert
-                if isinstance(wert, str):
-                    return wert.encode("utf-8")
-                return json.dumps(wert).encode("utf-8")
-        # Wie ein echter Anbieter bei 404: der Aufrufer soll nur eine
-        # Fehlerart kennen muessen.
-        raise NichtGefunden(url)
 
 
 class Aufzeichnung:
     """Eine aufgezeichnete HTTP-Antwort: Status, Kopfzeilen, Koerper.
 
     Genau das Format, das eine aiohttp-Sitzung liefert -- deshalb kann
-    :class:`~hacs_lab.http_aiohttp.AiohttpClient` damit geprueft werden,
+    :class:`~http_aiohttp.AiohttpClient` damit geprueft werden,
     ohne dass der Test aiohttp importiert oder das Netz beruehrt.
     """
 

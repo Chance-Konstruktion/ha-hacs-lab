@@ -3,7 +3,7 @@
 Stufe M5 der Roadmap: «Periodischer Lauf ueber alle Eintraege» und
 «Fehler eines Repos darf den Lauf der anderen nicht abbrechen». Diese
 Datei ist die Orchestrierung -- der Vergleich selbst bleibt in
-:mod:`hacs_lab.core.versionen` (die Abnahme verlangt, dass es die
+:mod:`versionen` (die Abnahme verlangt, dass es die
 einzige vergleichende Stelle bleibt).
 
 Reihenfolge pro Eintrag: Releases fragen; gibt es keine, greift die

@@ -7,11 +7,11 @@ Repository, ohne dass der Ablauf den Anbieter kennt.
 """
 
 import pytest
-
 from hacs_lab.core.entdeckung import entdecke
 from hacs_lab.core.forge import NichtGefunden
 from hacs_lab.core.forgejo_forge import ForgejoForge
-from tests.attrappe import FakeHttp
+
+from tests.attrappe_kern import FakeHttp
 from tests.forgejo_antworten import (
     HACS_JSON_DYNDNS,
     HACS_JSON_HAVACATION,

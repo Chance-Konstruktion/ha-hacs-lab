@@ -3,11 +3,12 @@
 import json
 
 import pytest
-
 from hacs_lab.core.entdeckung import entdecke
 from hacs_lab.core.gitlab_forge import GitLabForge
 from hacs_lab.core.validierung import pruefe_hacs_json, pruefe_manifest
-from tests.attrappe import FakeHttp, projekt
+
+from tests.attrappe import projekt
+from tests.attrappe_kern import FakeHttp
 
 HOST = "gitlab.example.net"
 GUELTIG = json.dumps({"name": "Bar", "render_readme": True})

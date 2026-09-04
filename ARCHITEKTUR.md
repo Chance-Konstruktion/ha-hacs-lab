@@ -1,6 +1,6 @@
 # Architektur
 
-Vier Entscheidungen, die alles Weitere bestimmen. Wer eine davon
+Fünf Entscheidungen, die alles Weitere bestimmen. Wer eine davon
 umwerfen will: gern, aber im Ticket und mit Begruendung -- nicht
 nebenbei im Code.
 
@@ -83,6 +83,50 @@ etwas fuer Home Assistant" ist nicht dasselbe wie "gehoert in HACS".
 Die Zusatz-Topics `hacs-integration`, `hacs-plugin`, `hacs-theme`,
 `hacs-template`, `hacs-appdaemon`, `hacs-python_script` bestimmen die
 Kategorie. Ohne Zusatz-Topic gilt `integration`.
+
+## 5. Der Kern wohnt in der Integration
+
+```
+custom_components/hacs_lab/      die Integration -- importiert Home Assistant
+  core/                           der Kern -- pures Python, kein HA-Import
+    forge.py                      Schnittstelle (Anbieter, Fehlerarten, …)
+    gitlab_forge.py, forgejo_forge.py
+    http_aiohttp.py               aiohttp-Umsetzung des HttpClient
+```
+
+Bis M0.5 lag der Kern als eigenstaendiges ``hacs_lab`` neben
+``custom_components`` -- verbunden durch einen Suchpfad-Fallback. Das
+brach in der echten Handinstallation (Issue #11, Befund a): der
+Fallback zeigte ins Konfigurationsverzeichnis, dorthin kopiert
+niemand etwas, also ImportError. Die drei Kandidaten:
+
+1. **Kern in die Integration ziehen** (gewaehlt): eine Adresse, ein
+   Verzeichnis, relative Importe (``from .core.forge import ...``).
+   Der Suchpfad bleibt unberuehrt -- das ist keine Kleinigkeit, denn
+   jeder Griff auf ``sys.path`` in einer echten Installation (
+   ``/config``) beschattet frueher oder spaeter die Standardbibliothek
+   oder Home Assistant. Handinstallation heisst jetzt: einen Ordner
+   kopieren. Der Release-ZIP enthaelt einen Ordner. Kein Werkzeug, kein
+   Paketindex, nichts zu installieren, bevor der erste Versuch startet.
+2. **Kern als Wheel ueber ``requirements``**: sauber verpackt, aber ein
+   Paketindex mehr im Spiel -- und jeder HACS-Nutzer bekaeme eine
+   Abhaengigkeit, die nicht aus diesem Repository kommt. Fuer eine
+   Integration, die gerade bei privaten Instanzen ihr Publikum hat,
+   ist das der schlechtere Handel.
+3. **Release-Archiv mit zwei Ordnern**: loest die Handinstallation
+   nicht -- wer von Hand kopiert, kopiert beim besten Willen nicht
+   zwei Verzeichnisse an zwei verschiedene Stellen.
+
+Der Preis von (1) heisst ehrlich: der Kern liegt in einem
+Home-Assistant-Verzeichnis, obwohl er nichts mit Home Assistant zu tun
+hat. Der Preis wird beglichen, nicht verheimlicht: die Regel ``kein
+HA-Import im Kern`` bleibt maschinell pruefbar (CI grept ``core/`` auf
+Home-Assistant-Importe), der Form-Waechter ``auslieferungsform`` in der
+Pipeline verhindert das Zurueckrutschen in die Wurzel-Form, und die
+Kern-Tests melden den Kern per ``tests/kern_laden.py`` an -- registriert
+in ``sys.modules``, niemals auf den Suchpfad gestellt. Die
+Home-Assistant-Bahn (``tests_ha/``) importiert denselben Code unter
+seinem echten Namen; keine Bahn teilt Objekte mit der anderen.
 
 ## Was der Kern nicht darf
 

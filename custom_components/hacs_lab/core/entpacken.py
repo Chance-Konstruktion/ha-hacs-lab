@@ -14,7 +14,7 @@ hinterlaesst damit keine halbe Installation.
 Das Modul entscheidet selbst ueber **keinen** Pfad. Zwischenlager und
 Ziel kommen als Argumente herein (ARCHITEKTUR.md: der Kern schreibt
 nur, was die HA-Schicht ihm ausdruecklich vorsetzt), die Berechnung
-der Pfade je Kategorie liegt in :mod:`hacs_lab.core.zielpfade`.
+der Pfade je Kategorie liegt in :mod:`zielpfade`.
 """
 
 from __future__ import annotations
@@ -248,7 +248,7 @@ def entpacke(
     nicht gewaehlten Eintrag fliegt auf. Als schlichte Sammlung von
     Namen behaelt jeder Eintrag seinen Archiv-Namen; als Zuordnung
     (der Kopierplan aus
-    :func:`hacs_lab.core.zielpfade.waehle_eintraege`) landet jeder
+    :func:`zielpfade.waehle_eintraege`) landet jeder
     Eintrag gleich unter seinem Ziel-Namen.
     """
     grenzen = grenzen or EntpackGrenzen()

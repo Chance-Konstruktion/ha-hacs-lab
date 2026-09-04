@@ -9,9 +9,10 @@ Grundregeln, die fuer jede Stufe gelten:
 * **Kein Fork von HACS.** HACS*lab ist eine eigene Integration neben
   HACS. Nichts in diesem Repo ist eine geaenderte Kopie von HACS-Code.
 * **Kein `if provider == "gitlab":` im Ablauf.** Anbieterwissen steckt
-  hinter `hacs_lab/core/forge.py`, sonst nirgends.
+  hinter `custom_components/hacs_lab/core/forge.py`, sonst nirgends.
 * **Der Kern bleibt frei von Home Assistant.** Alles unter
-  `hacs_lab/core/` laeuft ohne HA und ist ohne Netz testbar.
+  `custom_components/hacs_lab/core/` laeuft ohne HA und ist ohne Netz
+  testbar (Form-Entscheidung zu #11).
 * **Jede Stufe endet gruen.** Neue Funktion ohne Test ist keine
   fertige Stufe.
 
@@ -97,8 +98,10 @@ ein gleichnamiges GitHub-Repo verdraengt es nicht.
 ## M4 -- Installation und Deinstallation (M4a erledigt, M4b offen)
 
 **Stand:** M4a (Entpacken und Zielpfade, MR !3, Issue #12) ist
-erledigt. M4b -- die Installation in Home Assistant -- wartet auf die
-Auslieferungsform aus M0.5 (Issue #11) und bleibt Issue #4.
+erledigt. M0.5 -- die Auslieferungsform -- ist entschieden und umgesetzt
+(Issue #11): der Kern wohnt in der Integration, relative Importe, kein
+Suchpfad-Griff. M4b -- die Installation in Home Assistant -- ist damit
+entblockt und bleibt Issue #4.
 
 **Ziel:** Dateien landen an der richtigen Stelle.
 

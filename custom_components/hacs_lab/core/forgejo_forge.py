@@ -1,7 +1,7 @@
 """Forgejo als Anbieter (REST API v1) -- Codeberg ist die Referenzinstanz.
 
 Bewusst ohne feste HTTP-Bibliothek: der :class:`HttpClient` wird
-hineingereicht, genau wie bei :class:`~hacs_lab.core.gitlab_forge.GitLabForge`.
+hineingereicht, genau wie bei :class:`~gitlab_forge.GitLabForge`.
 Dass dieser Anbieter ohne jede Sonderbehandlung im Ablauf auskommt,
 ist der Beweis, den Stufe M9 verlangt (siehe ROADMAP.md): ein dritter
 Anbieter ist eine weitere Klasse und sonst nichts.
@@ -78,7 +78,7 @@ def _zu_info(roh: dict) -> RepositoryInfo:
 
 
 class ForgejoForge:
-    """Umsetzung von :class:`~hacs_lab.core.forge.Forge` fuer Forgejo."""
+    """Umsetzung von :class:`~forge.Forge` fuer Forgejo."""
 
     provider = FORGEJO
 
@@ -242,7 +242,7 @@ class ForgejoForge:
         *,
         seiten: int | None = None,
     ):
-        """Wie :meth:`~hacs_lab.core.gitlab_forge.GitLabForge._json`.
+        """Wie :meth:`~gitlab_forge.GitLabForge._json`.
 
         Forgejo meldet Fehler als ``{"message": ...}`` ohne Kennung --
         echte 404 wirft der HTTP-Zugang bereits als

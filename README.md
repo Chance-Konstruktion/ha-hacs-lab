@@ -42,10 +42,10 @@ by hand. It takes about two minutes.
    registry; the project is internal, so downloading needs an account on the
    instance.
 2. Extract the archive **into your Home Assistant configuration directory**
-   (the one that contains `configuration.yaml`). The archive mirrors the
-   repository layout, so every folder lands where it belongs: the
-   integration under `custom_components/hacs_lab/`, and — depending on the
-   release — the core library next to it.
+   (the one that contains `configuration.yaml`). The archive contains a
+   single folder, `custom_components/hacs_lab/` — core library included.
+   One folder to copy, nothing else to set up; the integration finds its
+   core through relative imports, so it never touches your Python path.
 3. Restart Home Assistant.
 4. Add the integration: *Settings → Devices & Services → Add Integration*,
    search for **HACS*lab**. Enter the host of your GitLab instance (a pasted
@@ -111,20 +111,22 @@ atomically, rolled back on failure.
 ## Repository layout
 
 ```
-hacs_lab/                     the core — pure Python, no Home Assistant,
-                              no network in tests
-  core/forge.py               the provider interface (GitLab, Forgejo, …)
-  core/gitlab_forge.py        GitLab REST v4
-  core/forgejo_forge.py       Forgejo (Codeberg recordings)
-  core/validierung.py         hacs.json, manifest.json
-  core/versionen.py           version compare and update decision
-  core/entdeckung.py          topic → candidate → validation
-  core/entpacken.py           guarded unpacking, atomic install
-custom_components/hacs_lab/   the thin Home Assistant layer
+custom_components/hacs_lab/   the integration — thin Home Assistant layer
   manifest.json               domain, version, config flow
   config_flow.py              setup dialog with connection check
   frontend/panel.js           the sidebar panel (no YAML)
   translations/               dialog texts
+  core/                       the core — pure Python, no Home Assistant,
+                              no network in tests; lives here since the
+                              delivery-form decision (issue #11)
+    forge.py                  the provider interface (GitLab, Forgejo, …)
+    gitlab_forge.py           GitLab REST v4
+    forgejo_forge.py          Forgejo (Codeberg recordings)
+    http_aiohttp.py           aiohttp-backed HttpClient (session passed in)
+    validierung.py            hacs.json, manifest.json
+    versionen.py              version compare and update decision
+    entdeckung.py             topic → candidate → validation
+    entpacken.py              guarded unpacking, atomic install
 auslieferung/release_bauen.py deterministic release archive builder
 tests/                        core suite — pytest, no network
 tests_ha/                     Home Assistant lane — offline, on a test double

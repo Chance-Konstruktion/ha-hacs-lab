@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from hacs_lab.core.forge import ForgeFehler, NichtGefunden
-from hacs_lab.http_aiohttp import AiohttpClient
+from hacs_lab.core.http_aiohttp import AiohttpClient
+
 from tests.attrappe import Aufzeichnung, SitzungsAttrappe
 from tests.echte_antworten import (
     KOPFZEILEN_SEITE_1,

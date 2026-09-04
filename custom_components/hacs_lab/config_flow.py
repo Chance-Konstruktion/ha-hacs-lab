@@ -29,12 +29,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from hacs_lab.core.forge import ForgeFehler, NichtGefunden, RepositoryInfo
-from hacs_lab.core.gitlab_forge import GitLabForge
-from hacs_lab.core.identity import RepositoryIdentity
-from hacs_lab.core.validierung import KATEGORIEN
-from hacs_lab.http_aiohttp import AiohttpClient
-
 from .const import (
     CONF_ABSTAND_MINUTEN,
     CONF_HOST,
@@ -43,6 +37,11 @@ from .const import (
     STANDARD_ABSTAND_MINUTEN,
     host_normalisieren,
 )
+from .core.forge import ForgeFehler, NichtGefunden, RepositoryInfo
+from .core.gitlab_forge import GitLabForge
+from .core.http_aiohttp import AiohttpClient
+from .core.identity import RepositoryIdentity
+from .core.validierung import KATEGORIEN
 from .eintraege import (
     CONF_ADRESSE,
     CONF_DATEIEN_DEINSTALLIEREN,

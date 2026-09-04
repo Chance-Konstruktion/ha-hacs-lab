@@ -28,14 +28,13 @@ import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hacs_lab.core import entpacken, zielpfade
-from hacs_lab.core.validierung import pruefe_manifest
+from .core import entpacken, zielpfade
+from .core.validierung import pruefe_manifest
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from hacs_lab.core.forge import Forge
-
+    from .core.forge import Forge
     from .eintraege import Eintrag
 
 #: Zwischenlager unter der Konfiguration -- dasselbe Dateisystem wie das

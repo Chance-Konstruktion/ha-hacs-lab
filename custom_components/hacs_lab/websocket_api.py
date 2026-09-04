@@ -35,11 +35,10 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from hacs_lab.core.entdeckung import entdecke
-from hacs_lab.core.forge import ForgeFehler, NichtGefunden
-from hacs_lab.core.identity import SUFFIX, RepositoryIdentity
-from hacs_lab.core.validierung import KATEGORIEN
-
+from .core.entdeckung import entdecke
+from .core.forge import ForgeFehler, NichtGefunden
+from .core.identity import SUFFIX, RepositoryIdentity
+from .core.validierung import KATEGORIEN
 from .eintraege import (
     BereitsVorhanden,
     KategorieUnbekannt,

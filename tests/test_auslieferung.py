@@ -25,6 +25,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from hacs_lab.core.validierung import pruefe_hacs_json, pruefe_manifest
 
 from auslieferung.release_bauen import (
     BauFehler,
@@ -35,7 +36,6 @@ from auslieferung.release_bauen import (
     haupt,
     lies_version,
 )
-from hacs_lab.core.validierung import pruefe_hacs_json, pruefe_manifest
 
 #: Die Wurzel des ausgecheckten Standes -- zwei Ebenen ueber diesem Test.
 WURZEL = Path(__file__).resolve().parents[1]
@@ -101,19 +101,28 @@ def zip_namen(pfad: Path) -> list[str]:
 
 
 class TestForm:
-    def test_alte_form_packt_beide_ordner(self, tmp_path: Path):
-        """Echter Stand: Integration und Kern an der Wurzel wandern beide rein."""
+    def test_eigene_form_packt_den_kern_mit(self, tmp_path: Path):
+        """Echter Stand seit M0.5: der Kern wandert IN der Integration.
+
+        Der ZIP enthaelt keine ``hacs_lab``-Wurzel mehr -- entpackt im
+        Konfigurationsverzeichnis entsteht genau ein Ordner, und der
+        Kern liegt dort, wo die Integration ihn per relativem Import
+        findet.
+        """
         ziel = baue_release(WURZEL, tmp_path)
         namen = zip_namen(ziel)
         assert "custom_components/hacs_lab/manifest.json" in namen
         assert "custom_components/hacs_lab/__init__.py" in namen
-        assert "hacs_lab/core/forge.py" in namen
-        assert "hacs_lab/core/validierung.py" in namen
+        assert "custom_components/hacs_lab/core/forge.py" in namen
+        assert "custom_components/hacs_lab/core/validierung.py" in namen
+        assert "custom_components/hacs_lab/core/http_aiohttp.py" in namen
         assert "custom_components/hacs_lab/frontend/panel.js" in namen
         assert "custom_components/hacs_lab/translations/de.json" in namen
+        assert not any(n.startswith("hacs_lab/") for n in namen)
 
-    def test_alte_form_wird_erkannt(self):
-        assert form(WURZEL) == "alte Form (Kern an der Wurzel)"
+    def test_eigene_form_wird_erkannt(self):
+        """Das Lager kennt sich selbst -- die Form nach M0.5 ist verbindlich."""
+        assert form(WURZEL) == "neue Form (Kern in der Integration)"
 
     def test_kein_muell_im_zip(self, tmp_path: Path):
         """Tests, Caches und Bytecode haben im Release nichts verloren."""
