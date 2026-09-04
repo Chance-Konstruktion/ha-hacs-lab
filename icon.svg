@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="HACS*lab Symbol: Laborkolben mit Funkelstern">
+  <!-- HACS*lab · Laborkolben (das Labor) + Funkelstern (der Stern aus dem Namen) -->
+  <defs>
+    <linearGradient id="grund" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#123b5e"/>
+      <stop offset="1" stop-color="#0b1e33"/>
+    </linearGradient>
+    <linearGradient id="fluss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5ce4f7"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="stern" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd166"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Grundplatte: abgerundetes Quadrat, Nachtblau -->
+  <rect x="8" y="8" width="496" height="496" rx="96" fill="url(#grund)"/>
+  <rect x="8" y="8" width="496" height="496" rx="96" fill="none" stroke="#1d4e75" stroke-width="4"/>
+
+  <!-- Erlenmeyerkolben: symmetrisch · Hals, Kegel, runder Boden -->
+  <path d="M 221 92 V 196 L 164 366 Q 152 404 190 404 H 322 Q 360 404 348 366 L 291 196 V 92 Z"
+        fill="none" stroke="#e8f4ff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Kolbenrand: lippenbreiter als der Hals -->
+  <path d="M 201 92 H 311" stroke="#e8f4ff" stroke-width="16" stroke-linecap="round"/>
+
+  <!-- Fuellung: cyan, leuchtend · exakt innerhalb der Kontur -->
+  <path d="M 189 316 L 323 316 L 338 362 Q 344 394 314 394 H 198 Q 168 394 174 362 Z"
+        fill="url(#fluss)" opacity="0.92"/>
+  <!-- Blasen -->
+  <circle cx="236" cy="354" r="11" fill="#d9f7ff" opacity="0.85"/>
+  <circle cx="285" cy="366" r="7" fill="#d9f7ff" opacity="0.7"/>
+  <circle cx="262" cy="330" r="5" fill="#d9f7ff" opacity="0.55"/>
+  <circle cx="308" cy="352" r="4" fill="#d9f7ff" opacity="0.6"/>
+
+  <!-- Funkelstern: das Sternchen aus HACS*lab -->
+  <path d="M 396 88 q 11 44 54 54 q -43 10 -54 54 q -11 -44 -54 -54 q 43 -10 54 -54 Z"
+        fill="url(#stern)"/>
+
+  <!-- Labor-Skala am Kolbenhals -->
+  <path d="M 232 122 h 14 M 232 154 h 14 M 232 186 h 14" stroke="#9fc9e8" stroke-width="8" stroke-linecap="round" opacity="0.55"/>
+</svg>

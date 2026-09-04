@@ -82,7 +82,7 @@ MINIMAL_MANIFEST = json.dumps(
     {
         "domain": "hacs_lab",
         "name": "HACS*lab",
-        "version": "0.1.0",
+        "version": "0.1.1",
         "codeowners": ["@chance-konstruktion", "@super-z"],
         "config_flow": True,
         "iot_class": "cloud_polling",
@@ -204,20 +204,20 @@ class TestDeterminismus:
 
 class TestVersion:
     def test_version_aus_manifest(self):
-        assert lies_version(WURZEL) == "0.1.0"
+        assert lies_version(WURZEL) == "0.1.1"
 
     def test_name_traegt_version(self, tmp_path: Path):
         ziel = baue_release(WURZEL, tmp_path)
-        assert ziel.name == "hacs-lab-v0.1.0.zip"
+        assert ziel.name == "hacs-lab-v0.1.1.zip"
 
     def test_tag_wird_normalisiert(self, tmp_path: Path):
-        ziel = baue_release(WURZEL, tmp_path, version="v0.1.0")
-        assert ziel.name == "hacs-lab-v0.1.0.zip"
+        ziel = baue_release(WURZEL, tmp_path, version="v0.1.1")
+        assert ziel.name == "hacs-lab-v0.1.1.zip"
 
     def test_abweichende_version_wird_verweigert(self, tmp_path: Path):
         """Tag und manifest.json muessen dasselbe sagen. Ein Release, der im
-        Namen v0.9.0 verspricht und als 0.1.0 installiert, ist eine Falle."""
-        with pytest.raises(BauFehler, match="0.9.0.*0.1.0|0.1.0.*0.9.0"):
+        Namen v0.9.0 verspricht und als 0.1.1 installiert, ist eine Falle."""
+        with pytest.raises(BauFehler, match="0.9.0.*0.1.1|0.1.1.*0.9.0"):
             baue_release(WURZEL, tmp_path, version="v0.9.0")
 
 
@@ -262,9 +262,9 @@ class TestFehler:
 
 class TestKommandozeile:
     def test_baut_in_zielverzeichnis(self, tmp_path: Path, capsys):
-        ergebnis = haupt(["--version", "v0.1.0", str(tmp_path)])
+        ergebnis = haupt(["--version", "v0.1.1", str(tmp_path)])
         assert ergebnis == 0
-        assert (tmp_path / "hacs-lab-v0.1.0.zip").is_file()
+        assert (tmp_path / "hacs-lab-v0.1.1.zip").is_file()
         ausgabe = capsys.readouterr().out
         assert "SHA-256" in ausgabe
         assert "Dateien" in ausgabe
