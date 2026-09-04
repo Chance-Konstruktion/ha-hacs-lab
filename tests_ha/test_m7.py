@@ -289,7 +289,7 @@ async def test_voller_durchgang_ohne_yaml(
     assert gespeichert["eintraege"] == []
     # Alle Aufzeichnungen verbraucht: kein Ruf ging ueber die Reihe hinaus
     # (seit M8-2 fragt jeder Lauf zusaetzlich die Stammdaten ueber die ID).
-    assert len(attrappe.abrufe) == 9
+    assert len(attrappe.abrufe) == 11  # M4b: zwei zusaetzliche Release-Fragen
 
 
 # ----------------------------------------------------------------------

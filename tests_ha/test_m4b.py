@@ -85,9 +85,20 @@ def releases(*objekte: dict) -> Aufzeichnung:
 
 
 def beispiel_integration_zip(domain: str = "beispiel_integration") -> bytes:
-    """Ein Mini-Integrations-Release, wie ein Besitzer ihn anhängt."""
+    """Ein Mini-Integrations-Release, wie ein Besitzer ihn anhängt.
+
+    Die Dateien stehen in der Wurzel des Anhangs -- genau dafuer ist
+    ``zip_release`` in der ``hacs.json`` da (HACS-Konvention: der
+    Anhang ist gebaut, nicht gepackt-vom-Quellstand). Ohne die
+    Erklaerung wuesste der Installer nicht, dass die Wurzel der
+    Inhalt ist.
+    """
     archiv = io.BytesIO()
     with zipfile.ZipFile(archiv, "w") as zip_datei:
+        zip_datei.writestr(
+            "hacs.json",
+            json.dumps({"name": "Beispiel", "zip_release": True, "render_readme": False}),
+        )
         zip_datei.writestr(
             "manifest.json",
             json.dumps(
@@ -104,9 +115,27 @@ def beispiel_integration_zip(domain: str = "beispiel_integration") -> bytes:
 
 
 def eigener_release_zip(tmp_path: Path) -> bytes:
-    """Das DOGFOOD-ZIP: unser eigener Release, mit dem echten Builder gebaut."""
-    ziel = baue_release(WURZEL, tmp_path / "dist")
-    return ziel.read_bytes()
+    """Das DOGFOOD-ZIP: unser eigener Release, in installierbare Form gebracht.
+
+    Mit ``release_bauen`` gebaut, echte Dateien, echt deterministisch --
+    nur der Aeussere kommt ab: das Release-ZIP ist die
+    HANDinstallations-Form (``custom_components/hacs_lab/...`` an der
+    Wurzel, zum Entpacken ins Konfigurationsverzeichnis), der Installer
+    will die HACS-Form (ein Ordner, alles darunter). Beide Formen sind
+    Absicht: die eine spricht Menschen, die andere dem Installer. Hier
+    wird die eine in die andere gestuelpt -- derselbe Inhalt, dieselben
+    Bytes je Datei.
+    """
+    handform = baue_release(WURZEL, tmp_path / "dist")
+    archiv = io.BytesIO()
+    with zipfile.ZipFile(handform) as quelle, zipfile.ZipFile(archiv, "w") as ziel:
+        for name in quelle.namelist():
+            if name.startswith("custom_components/hacs_lab/"):
+                ziel.writestr(
+                    "hacs_lab/" + name[len("custom_components/hacs_lab/") :],
+                    quelle.read(name),
+                )
+    return archiv.getvalue()
 
 
 def mock_eintrag() -> MockConfigEntry:
