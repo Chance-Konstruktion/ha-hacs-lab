@@ -2,7 +2,7 @@
 
 Das Panel (``frontend/panel.js``) redet mit Home Assistant, nicht mit
 der Welt: Diese Datei ist die ganze Schnittstelle zwischen beiden.
-Fuenf Befehle, mehr braucht kein Laden:
+Sechs Befehle, mehr braucht kein Laden:
 
 * ``hacs_lab/eintraege`` -- die Liste der beobachteten Repositories,
   mit Stand (installiert), neuester Version, Sternen und Verweisen
@@ -13,6 +13,10 @@ Fuenf Befehle, mehr braucht kein Laden:
 * ``hacs_lab/hinzufuegen`` -- ein Fund aufnehmen (derselbe Weg wie der
   Dialog: Identitaet klaeren, Kategorie pruefen, Eintrag anlegen)
 * ``hacs_lab/entfernen`` -- einen Eintrag aus der Liste nehmen
+* ``hacs_lab/deinstallieren`` -- Stufe M4b: die installierten Dateien
+  wegnehmen, den verzeichneten Weg entlang. Home Assistants
+  update-Entities kennen kein Uninstall -- deshalb ist das hier ein
+  Befehl, nicht ein Dienst von ihnen.
 
 Installieren und aktualisieren geht bewusst NICHT durch diese Datei:
 dafuer gibt es die update-Entities aus Stufe M5 mit ihrem
@@ -45,6 +49,8 @@ from .eintraege import (
     NichtVorhanden,
     kategorie_aus_topics,
 )
+from .installation import InstallationsFehler, deinstalliere_version
+from .neustart import neustart_hinweis
 
 if TYPE_CHECKING:
     from homeassistant.components.websocket_api.connection import ActiveConnection
@@ -435,6 +441,68 @@ async def ws_entfernen(
     )
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "hacs_lab/deinstallieren",
+        vol.Required("storage_key"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_deinstallieren(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Installierte Dateien entfernen -- den verzeichneten Weg (M4b).
+
+    Der Eintrag bleibt in der Liste (dafuer gibt es ``entfernen``);
+    hier verschwinden nur die Dateien, und der Stand vergisst Version
+    und Weg. Ohne verzeichneten Weg (installiert vor M4b) kommt die
+    ehrliche Ansage: erst neu installieren, dann laesst sich auch
+    sauber entfernen.
+    """
+    schluessel = str(msg["storage_key"])
+    for laufzeit in _laufzeiten(hass).values():
+        eintrag = laufzeit.eintraege.finde(schluessel)
+        if eintrag is None:
+            continue
+        stand = laufzeit.staende.stand(schluessel)
+        if not stand.installiert:
+            connection.send_error(msg["id"], "nichts_installiert", "nichts installiert")
+            return
+        if not stand.pfad:
+            connection.send_error(
+                msg["id"],
+                "kein_weg",
+                "kein installierter Pfad verzeichnet (installiert vor M4b?) "
+                "-- einmal neu installieren, dann laesst sich auch "
+                "entfernen",
+            )
+            return
+        try:
+            await deinstalliere_version(hass, stand.pfad)
+        except InstallationsFehler as fehlschlag:
+            connection.send_error(
+                msg["id"], "deinstallation_fehlgeschlagen", str(fehlschlag)
+            )
+            return
+        await laufzeit.staende.setzen(schluessel, installiert="", pfad="")
+        neustart_hinweis(hass, eintrag, stand.installiert, "deinstallation")
+        _LOGGER.info(
+            "Custom Repository ueber die Oberflaeche deinstalliert: %s",
+            eintrag.anzeigename,
+        )
+        connection.send_result(
+            msg["id"], {"deinstalliert": eintrag.anzeigename, "host": laufzeit.forge.host}
+        )
+        return
+
+    connection.send_error(
+        msg["id"], "nicht_mehr_da", schluessel + " steht in keiner Liste"
+    )
+
+
 #: Alle Befehle dieser Datei -- ``__init__.py`` meldet sie der Reihe nach an.
 BEFEHLE = (
     ws_eintraege,
@@ -442,4 +510,5 @@ BEFEHLE = (
     ws_detail,
     ws_hinzufuegen,
     ws_entfernen,
+    ws_deinstallieren,
 )

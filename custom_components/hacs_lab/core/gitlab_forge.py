@@ -144,6 +144,15 @@ class GitLabForge:
         """Das Quell-Archiv einer Version -- Stufe M5, hinter der Naht."""
         return await self.http.get_bytes(await self.archiv_url(pfad, ref))
 
+    async def anhang(self, url: str) -> bytes:
+        """Laedt einen Release-Anhang (Stufe M4b) ueber den HTTP-Zugang.
+
+        Die Adresse stammt aus den Anhaengen eines Releases -- sie ist
+        eine Anbieteradresse (Paketregister oder Link), braucht also
+        Sitzung und Token wie jeder andere Abruf auch.
+        """
+        return await self.http.get_bytes(url)
+
     async def archiv_url(self, pfad: str, ref: str) -> str:
         return (
             self.api

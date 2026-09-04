@@ -2,10 +2,16 @@
 
 Jedes beobachtete Custom Repository bekommt eine ``update``-Entity:
 installierte Version, neueste Version, Release-Notizen, und einen
-``install``-Dienst, der das Archiv des Tags ueber die M4a-Naht an den
-Zielort tauscht (siehe :mod:`.installation`). Neue Eintraege erscheinen
-ohne Neustart als Entity, entfernte verschwinden -- genau das verlangt
-die Abnahme: «ein neues Release im GitLab erscheint ohne Zutun in HA».
+``install``-Dienst, der den Release-Anhang (sonst das Archiv des Tags)
+ueber die Naht an den Zielort tauscht (siehe :mod:`.installation`).
+Deinstallation ist bewusst KEIN update-Dienst: Home Assistants update-
+Entities kennen kein Uninstall-Konzept -- der Befehl
+``hacs_lab/deinstallieren`` (WebSocket, das Panel ruft ihn) nimmt den
+verzeichneten Zielweg wieder. Integrationen bekommen danach einen
+Neustart-Hinweis aufs Reparatur-Brett (siehe :mod:`.neustart`). Neue
+Eintraege erscheinen ohne Neustart als Entity, entfernte verschwinden
+-- genau das verlangt die Abnahme: «ein neues Release im GitLab
+erscheint ohne Zutun in HA».
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from .aktualisierer import HacsLabAktualisierer, hole_aktualisierer
 from .const import DOMAIN
 from .core.aktualisierungen import Fund
 from .installation import InstallationsFehler, installiere_version
+from .neustart import neustart_hinweis
 
 if TYPE_CHECKING:
     from . import Laufzeit
@@ -125,8 +132,15 @@ class HacsLabUpdateEntity(UpdateEntity):
         return self._laeuft_gerade
 
     async def async_added_to_hass(self) -> None:
-        """Auf den Takt horchen -- jede Runde schreibt den neuen Stand."""
+        """Auf den Takt horchen -- und auf den eigenen Stand (M4b).
+
+        Der Takt bringt neue Funds; der Stand aendert sich auch ohne
+        Takt (Deinstallation ueber den Befehl, Vorab-Schalter). Ohne
+        das Abonnement stunde die installierte Version in der Entity,
+        bis der naechste Herzschlag kaeme.
+        """
         self.async_on_remove(self._aktualisierer.async_add_listener(self._schreibe))
+        self.async_on_remove(self._staende.beobachte(self._schreibe))
 
     def _schreibe(self) -> None:
         if self.hass is not None:
@@ -187,13 +201,17 @@ class HacsLabUpdateEntity(UpdateEntity):
     async def async_install(
         self, version: str | None = None, backup: bool = False
     ) -> None:
-        """Installiert die neueste Version ueber die M4a-Naht.
+        """Installiert die neueste Version: Anhang zuerst, sonst Tag-Archiv.
 
         Eine bestimmte aeltere Version zu waehlen ist bewusst noch nicht
         dabei: der Lauf traegt nur die neueste je Eintrag. Das Feld
         ``version`` wird geprueft und abgewiesen, wenn es nicht die
         neueste ist -- lieber ehrlich meckern als heimlich das Falsche
         installieren.
+
+        Stufe M4b: der Zielweg wird mit der Version zusammen verzeichnet
+        (ohne Weg keine ehrliche Deinstallation), und bei Integrationen
+        landet ein Neustart-Hinweis auf dem Reparatur-Brett.
         """
         fund = self._fund
         if fund is None or fund.fehler is not None or not fund.tag:
@@ -207,15 +225,20 @@ class HacsLabUpdateEntity(UpdateEntity):
         self._laeuft_gerade = True
         self._schreibe()
         try:
-            await installiere_version(
+            pfad = await installiere_version(
                 self.hass, self._forge, self._eintrag_aktuell, fund.tag
             )
         except InstallationsFehler as fehlschlag:
             raise HomeAssistantError(str(fehlschlag)) from fehlschlag
         finally:
             self._laeuft_gerade = False
-        await self._staende.setzen(self._eintrag.storage_key, installiert=fund.neueste)
+        await self._staende.setzen(
+            self._eintrag.storage_key,
+            installiert=fund.neueste,
+            pfad=str(pfad),
+        )
         self._schreibe()
+        neustart_hinweis(self.hass, self._eintrag_aktuell, fund.neueste, "installation")
         _LOGGER.info(
             "%s auf %s installiert",
             self._eintrag_aktuell.anzeigename,

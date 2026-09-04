@@ -96,6 +96,10 @@
     "ablage_unlesbar": {
       "title": "Unlesbare Eintraege in der Ablage von {host}",
       "description": "{anzahl} gespeicherte Eintraege liessen sich nicht lesen und wurden uebersprungen. Geloescht wurde nichts. Beim naechsten Sichern der Liste schreibt sie nur noch Lesbares; nach einem Neustart verschwindet die Meldung, sobald die Ablage sauber ist."
+    },
+    "neustart_nach_installation": {
+      "title": "Neustart noetig: {name}",
+      "description": "{aktion} der Version {version} liegt als Dateien bereit -- Home Assistant laedt Integrationen aber nur beim Start. Ein Neustart macht die Aenderung wirksam; danach verschwindet dieser Hinweis von selbst."
     }
   }
 }

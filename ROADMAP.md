@@ -95,13 +95,16 @@ ein gleichnamiges GitHub-Repo verdraengt es nicht.
 
 ---
 
-## M4 -- Installation und Deinstallation (M4a erledigt, M4b offen)
+## M4 -- Installation und Deinstallation (erledigt)
 
 **Stand:** M4a (Entpacken und Zielpfade, MR !3, Issue #12) ist
 erledigt. M0.5 -- die Auslieferungsform -- ist entschieden und umgesetzt
 (Issue #11): der Kern wohnt in der Integration, relative Importe, kein
-Suchpfad-Griff. M4b -- die Installation in Home Assistant -- ist damit
-entblockt und bleibt Issue #4.
+Suchpfad-Griff. M4b (Issue #4) ist geliefert: Release-Anhang als
+bevorzugte Quelle (eindeutig, sonst Tag-Archiv), verzeichneter Zielweg
+in der Ablage, Deinstallation genau diesen Weg entlang, Neustart-Hinweis
+bei Integrationen aufs Reparatur-Brett -- Dogfood-Beweis mit dem eigenen
+Release-ZIP in der HA-Bahn.
 
 **Ziel:** Dateien landen an der richtigen Stelle.
 

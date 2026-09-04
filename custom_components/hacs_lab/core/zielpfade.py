@@ -100,6 +100,40 @@ def zielverzeichnis(kategorie: str, name: str) -> PurePosixPath:
     return wurzel
 
 
+def ist_zielpfad(pfad: PurePosixPath | str) -> bool:
+    """Ist das ein Pfad, den eine Installation von hier geschrieben haben kann?
+
+    Stufe M4b, Deinstallation: der Weg zum Ziel steht in der Ablage --
+    Ablagen lassen sich von Hand veraendern, also wird der Weg vor dem
+    Loeschen geprueft, nicht geglaubt. Ein gueltiger Weg ist relativ,
+    beginnt mit einer bekannten Kategorie-Wurzel (auch einer
+    zweiteiligen wie ``www/community``) und enthaelt nichts, was aus
+    ihm herausfuehrt. Die Wurzel allein zaehlt dabei -- flache
+    Kategorien (``themes``, ``python_scripts``) installieren direkt
+    hinein. Alles andere (absolut, ``..``, fremde Wurzel) ist eine
+    Absage, kein Fehler -- die Antwort ist Ja/Nein, und der Klartext
+    gehoert zum Aufrufer.
+    """
+    if isinstance(pfad, str):
+        try:
+            pfad = PurePosixPath(pfad)
+        except (ValueError, NotImplementedError):
+            return False
+    teile = pfad.parts
+    if pfad.is_absolute() or not teile:
+        return False
+    for teil in teile:
+        if teil in ("", ".", "..") or "/" in teil or "\\" in teil or "\x00" in teil:
+            return False
+    wurzeln = sorted(
+        PurePosixPath(wurzel).parts for wurzel in _KATEGORIE_WURZELN.values()
+    )
+    for wurzel in wurzeln:
+        if teile[: len(wurzel)] == wurzel:
+            return True
+    return False
+
+
 def ausschnitt(daten: dict | None) -> Ausschnitt:
     """Bestimmt aus den ``hacs.json``-Feldern den Ausschnitt eines Archivs.
 

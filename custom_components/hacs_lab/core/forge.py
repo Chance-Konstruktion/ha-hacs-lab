@@ -128,6 +128,16 @@ class Forge(Protocol):
     async def archiv_url(self, pfad: str, ref: str) -> str:
         """Adresse des Quell-Archivs fuer eine Version."""
 
+    async def anhang(self, url: str) -> bytes:
+        """Laedt einen Release-Anhang -- die bevorzugte Installationsquelle.
+
+        Stufe M4b: hat der Besitzer einem Release ein ZIP beigelegt, ist
+        das die Quelle Nummer eins -- es ist gebaut, nicht gepackt-vom-
+        Quellstand, und der Besitzer hat es dorthin gelegt. Die Adresse
+        kam aus :attr:`Release.anhaenge`, gehoert also zum Anbieter --
+        auch das Laden bleibt hinter dieser Naht.
+        """
+
     async def suche_nach_topic(
         self,
         topic: str,
