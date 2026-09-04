@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def async_setup_entry(
+async def async_setup_entry(
     hass: HomeAssistant,
     eintrag: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
