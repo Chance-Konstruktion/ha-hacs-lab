@@ -14,9 +14,19 @@ class FakeHttp:
         self.json_antworten = json_antworten or {}
         self.dateien = dateien or {}
         self.aufrufe: list[tuple[str, dict]] = []
+        self.seitenwuensche: list[int | None] = []
 
-    async def get_json(self, url: str, params: dict | None = None):
+    async def get_json(
+        self,
+        url: str,
+        params: dict | None = None,
+        *,
+        seiten: int | None = None,
+    ):
+        # ``seiten`` wird mit aufgezeichnet, damit ein Test belegen
+        # kann, dass eine Probe wirklich nur eine Seite anfordert.
         self.aufrufe.append((url, params or {}))
+        self.seitenwuensche.append(seiten)
         for schluessel, wert in self.json_antworten.items():
             if schluessel in url:
                 return wert

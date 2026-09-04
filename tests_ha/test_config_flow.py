@@ -79,6 +79,48 @@ async def test_verbindung_gelingt(hass: HomeAssistant, sitzung_einpflanzen) -> N
     assert eintraege[0].state is ConfigEntryState.LOADED
 
 
+async def test_probe_holt_hoechstens_eine_seite(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    """Der Dialog beweist die Verbindung -- er inventarisiert sie nicht.
+
+    Vorher rief die Pruefung ``suche_nach_topic()`` ohne Grenze auf:
+    ``per_page=100``, und der HTTP-Zugang verfolgte ``X-Next-Page`` bis
+    zu 200 Seiten weiter. Gegen eine grosse Instanz -- gitlab.com steht
+    als Vorgabe im Formular -- holte ein Klick auf "Absenden" im
+    schlimmsten Fall zwanzigtausend Projekte, bevor der Dialog
+    antwortete (Issue #11, Befund b).
+
+    Geprueft wird deshalb beides: die kleine Seite UND dass keine
+    Folgeseite geholt wird, obwohl der Anbieter eine anbietet.
+    """
+    attrappe = sitzung_einpflanzen(
+        [
+            Aufzeichnung(
+                text=json.dumps([projekt() for _ in range(1)]),
+                kopfzeilen={"X-Next-Page": "2"},
+            ),
+            antwort(),  # fuer den ersten Herzschlag nach dem Dialog
+        ]
+    )
+
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    ergebnis = await hass.config_entries.flow.async_configure(
+        ergebnis["flow_id"],
+        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+    url, params, _ = attrappe.abrufe[0]
+    assert params["per_page"] == "1", "die Probe darf nur einen Eintrag anfordern"
+    # Zwei Abrufe insgesamt: Dialog und Herzschlag. Waere die Folgeseite
+    # geholt worden, stuenden hier drei.
+    assert len(attrappe.abrufe) == 2
+
+
 async def test_token_reist_als_kopfzeile(
     hass: HomeAssistant, sitzung_einpflanzen
 ) -> None:

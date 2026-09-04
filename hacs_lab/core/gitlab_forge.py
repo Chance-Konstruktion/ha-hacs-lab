@@ -159,20 +159,33 @@ class GitLabForge:
         topic: str = TOPIC,
         gruppe: str | None = None,
         mit_untergruppen: bool = True,
+        grenze: int | None = None,
     ) -> list[RepositoryInfo]:
-        params = {"topic": topic, "per_page": "100", "archived": "false"}
+        # Ohne Grenze: volle Seiten, und der HTTP-Zugang blaettert bis
+        # zum Ende. Mit Grenze: hoechstens so viele Eintraege, genau
+        # eine Seite. Beides muss gesetzt werden -- ein kleineres
+        # per_page allein bremst nichts, weil sonst weitergeblaettert
+        # wird, bis die Liste zu Ende ist.
+        menge = 100 if grenze is None else max(1, grenze)
+        params = {"topic": topic, "per_page": str(menge), "archived": "false"}
         if gruppe:
             url = self.api + "/groups/" + _kodiere(gruppe) + "/projects"
             if mit_untergruppen:
                 params["include_subgroups"] = "true"
         else:
             url = self.api + "/projects"
-        roh = await self._json(url, params)
+        roh = await self._json(url, params, seiten=None if grenze is None else 1)
         return [_zu_info(p) for p in roh or [] if "id" in p]
 
     # -- intern -------------------------------------------------------
-    async def _json(self, url: str, params: dict[str, str] | None = None):
-        antwort = await self.http.get_json(url, params)
+    async def _json(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+        *,
+        seiten: int | None = None,
+    ):
+        antwort = await self.http.get_json(url, params, seiten=seiten)
         if isinstance(antwort, dict) and "message" in antwort and "id" not in antwort:
             meldung = str(antwort["message"])
             if "404" in meldung:

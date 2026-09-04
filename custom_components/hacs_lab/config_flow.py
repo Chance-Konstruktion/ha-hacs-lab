@@ -70,7 +70,11 @@ async def verbindung_pruefen(
     sitzung = async_get_clientsession(hass)
     klient = AiohttpClient(sitzung, token)
     forge = GitLabForge(klient, host)
-    return await forge.suche_nach_topic()
+    # Eine Probe, kein Bestandsabruf: hoechstens ein Eintrag, genau
+    # eine Seite. Ohne die Grenze holte ein Klick auf "Absenden"
+    # gegen eine grosse Instanz im schlimmsten Fall zwanzigtausend
+    # Projekte, bevor der Dialog antwortet (Issue #11).
+    return await forge.suche_nach_topic(grenze=1)
 
 
 class HacsLabFluss(config_entries.ConfigFlow, domain=DOMAIN):

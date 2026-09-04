@@ -153,7 +153,7 @@ async def test_unerwarteter_fehler_wird_fund() -> None:
     """Auch Attrappen-Wut (NichtGefunden, TypeError) wird Text, nie Wurf."""
 
     class ZornigerHttp(FakeHttp):
-        async def get_json(self, url, params=None):
+        async def get_json(self, url, params=None, **_):
             raise ForgeFehler("Instanz bockt")
 
     forge = GitLabForge(ZornigerHttp(), HOST)
@@ -167,7 +167,7 @@ def test_release_beschreibung_durch_den_forge() -> None:
     """Die Notizen reisen als ``beschreibung`` durch die GitLab-Schicht."""
 
     class StummerHttp(FakeHttp):
-        async def get_json(self, url, params=None):
+        async def get_json(self, url, params=None, **_):
             return [
                 {
                     "tag_name": "v9.9.9",
