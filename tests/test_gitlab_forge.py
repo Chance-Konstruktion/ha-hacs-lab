@@ -187,4 +187,3 @@ async def test_ohne_grenze_bleibt_es_beim_vollen_abruf():
     _, params = http.aufrufe[-1]
     assert params["per_page"] == "100"
     assert http.seitenwuensche[-1] is None
-
