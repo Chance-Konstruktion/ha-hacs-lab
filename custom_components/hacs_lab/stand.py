@@ -1,13 +1,16 @@
-"""Der Stand eines Eintrags: installierte Version, Vorab-Entscheid.
+"""Der Stand eines Eintrags: installierte Version, Weg, Vorab-Entscheid.
 
 Stufe M5 braucht je Eintrag zwei Dinge, die ueberleben muessen: welche
 Version als installiert gilt, und ob Vorabversionen mitgezaehlt werden
-duerfen (der Schalter in der Oberflaeche). Beides liegt in der Ablage
-unter dem Feld ``stand`` -- bewusst getrennt von der Eintrags-Liste,
-weil es sich unabhaessig von ihr aendert und hauefiger.
+duerfen (der Schalter in der Oberflaeche). Stufe M4b kommt das Dritte
+dazu: der Weg zum installierten Verzeichnis -- ohne ihn gaebe es keine
+ehrliche Deinstallation, nur Globbing nach Gefuehl. Alles liegt in der
+Ablage unter dem Feld ``stand`` -- bewusst getrennt von der
+Eintrags-Liste, weil es sich unabhaessig von ihr aendert und hauefiger.
 
-Die Form je Eintrag: ``{"installiert": "1.2.0", "vorabversionen": false}``.
-Fehlende Felder heissen Leere bzw. Nein -- gleiches tolerante Lesen wie
+Die Form je Eintrag: ``{"installiert": "1.2.0", "pfad":
+"custom_components/beispiel", "vorabversionen": false}``. Fehlende
+Felder heissen Leere bzw. Nein -- gleiches tolerante Lesen wie
 ueberall in der Ablage.
 """
 
@@ -25,12 +28,22 @@ FELD = "stand"
 class Stand:
     """Unveraenderlicher Zustand eines Eintrags."""
 
-    def __init__(self, installiert: str = "", vorabversionen: bool = False) -> None:
+    def __init__(
+        self,
+        installiert: str = "",
+        vorabversionen: bool = False,
+        pfad: str = "",
+    ) -> None:
         self.installiert = installiert
         self.vorabversionen = vorabversionen
+        self.pfad = pfad
 
     def as_dict(self) -> dict[str, str | bool]:
-        return {"installiert": self.installiert, "vorabversionen": self.vorabversionen}
+        return {
+            "installiert": self.installiert,
+            "vorabversionen": self.vorabversionen,
+            "pfad": self.pfad,
+        }
 
     def __eq__(self, andere: object) -> bool:
         if not isinstance(andere, Stand):
@@ -38,12 +51,14 @@ class Stand:
         return (
             self.installiert == andere.installiert
             and self.vorabversionen == andere.vorabversionen
+            and self.pfad == andere.pfad
         )
 
     def __repr__(self) -> str:
         return (
             f"Stand(installiert={self.installiert!r},"
-            f" vorabversionen={self.vorabversionen!r})"
+            f" vorabversionen={self.vorabversionen!r},"
+            f" pfad={self.pfad!r})"
         )
 
 
@@ -57,6 +72,7 @@ def _aus_dict(roh: object) -> Stand:
     return Stand(
         installiert=str(roh.get("installiert") or ""),
         vorabversionen=bool(roh.get("vorabversionen")),
+        pfad=str(roh.get("pfad") or ""),
     )
 
 
@@ -90,6 +106,7 @@ class Staende:
         schluessel: str,
         installiert: str | None = None,
         vorabversionen: bool | None = None,
+        pfad: str | None = None,
     ) -> Stand:
         """Aendert Felder eines Standes und sichert sofort.
 
@@ -102,6 +119,7 @@ class Staende:
             vorabversionen=(
                 alt.vorabversionen if vorabversionen is None else vorabversionen
             ),
+            pfad=alt.pfad if pfad is None else pfad,
         )
         self._karte[schluessel] = neu
         await self._ablage.sicher_teil(

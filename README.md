@@ -71,6 +71,15 @@ by hand. It takes about two minutes.
   interval you can tune per entry. A new release or tag raises the update,
   the install service swaps the files safely — staged in a temporary
   directory first, then an atomic switch, rolled back on failure.
+- **Preferred source:** if a release carries exactly one ZIP attachment,
+  that built artifact is installed instead of the auto-generated tag
+  archive; anything ambiguous falls back to the archive.
+- **Uninstall & restart:** every entry with a recorded install also
+  uninstalls — the recorded target path is checked against the known
+  category roots, then removed in one move. Installing or uninstalling
+  an **integration** raises a repair-center hint to restart Home
+  Assistant (integrations only load at startup); the hint clears
+  itself once the restart happened.
 - **Robust stock:** a renamed project is recognised by its ID and the name
   follows silently; a reachable-but-changed repository is reported, never
   guessed; diagnostics never print your token in the clear.

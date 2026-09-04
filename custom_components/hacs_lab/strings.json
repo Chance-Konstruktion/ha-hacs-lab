@@ -96,6 +96,10 @@
     "ablage_unlesbar": {
       "title": "Unreadable entries in the storage of {host}",
       "description": "{anzahl} stored entries could not be read and were skipped. Nothing was deleted. The next time the list is saved, only readable entries are written; this message disappears after a restart once the storage is clean."
+    },
+    "neustart_nach_installation": {
+      "title": "Restart required: {name}",
+      "description": "{aktion} of version {version} is in place as files — but Home Assistant loads integrations only at startup. A restart makes the change take effect; this hint then clears itself."
     }
   }
 }

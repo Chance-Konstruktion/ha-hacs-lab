@@ -1,11 +1,15 @@
 """Update-Entities je Eintrag -- Stufe M5, die sichtbare Seite.
 
 Jedes beobachtete Custom Repository bekommt eine ``update``-Entity:
-installierte Version, neueste Version, Release-Notizen, und einen
-``install``-Dienst, der das Archiv des Tags ueber die M4a-Naht an den
-Zielort tauscht (siehe :mod:`.installation`). Neue Eintraege erscheinen
-ohne Neustart als Entity, entfernte verschwinden -- genau das verlangt
-die Abnahme: «ein neues Release im GitLab erscheint ohne Zutun in HA».
+installierte Version, neueste Version, Release-Notizen, einen
+``install``-Dienst, der den Release-Anhang (sonst das Archiv des Tags)
+ueber die Naht an den Zielort tauscht (siehe :mod:`.installation`),
+und seit M4b einen ``uninstall``-Dienst, der genau diesen Weg wieder
+nimmt. Integrationen bekommen danach einen Neustart-Hinweis aufs
+Reparatur-Brett -- Home Assistant laedt sie nur beim Start. Neue
+Eintraege erscheinen ohne Neustart als Entity, entfernte verschwinden
+-- genau das verlangt die Abnahme: «ein neues Release im GitLab
+erscheint ohne Zutun in HA».
 """
 
 from __future__ import annotations
@@ -17,12 +21,18 @@ from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import issue_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.issue_registry import IssueSeverity
 
-from .aktualisierer import HacsLabAktualisierer, hole_aktualisierer
+from .aktualisierer import HacsLabAktualisierer, _kennung, hole_aktualisierer
 from .const import DOMAIN
 from .core.aktualisierungen import Fund
-from .installation import InstallationsFehler, installiere_version
+from .installation import (
+    InstallationsFehler,
+    deinstalliere_version,
+    installiere_version,
+)
 
 if TYPE_CHECKING:
     from . import Laufzeit
@@ -30,6 +40,36 @@ if TYPE_CHECKING:
     from .stand import Staende
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _neustart_hinweis(
+    hass: HomeAssistant, eintrag: Eintrag, version: str, aktion: str
+) -> None:
+    """M4b: Integrationen brauchen einen Neustart, um wirksam zu werden.
+
+    Home Assistant laedt ``custom_components`` beim Start -- Dateien,
+    die danach erscheinen oder verschwinden, aendern am laufenden
+    nichts. Genau das steht als Hinweis auf dem Reparatur-Brett, solange
+    bis der Neustart passiert ist: das Laden der Komponente entfernt
+    jeden Neustart-Hinweis (wer laeuft, ist neu gestartet). Andere
+    Kategorien (Themes, Plugins, Skripte) brauchen keinen Neustart --
+    dort bleibt das Brett still, das ist Physik, nicht Nachlaessigkeit.
+    """
+    if eintrag.kategorie != "integration":
+        return
+    issue_registry.async_create_issue(
+        hass,
+        DOMAIN,
+        "neustart_" + _kennung(eintrag.storage_key),
+        is_fixable=False,
+        severity=IssueSeverity.WARNING,
+        translation_key="neustart_nach_installation",
+        translation_placeholders={
+            "name": eintrag.anzeigename,
+            "version": version,
+            "aktion": aktion,
+        },
+    )
 
 
 async def async_setup_entry(
@@ -98,7 +138,9 @@ class HacsLabUpdateEntity(UpdateEntity):
         self._eintrag = eintrag
         self._aktualisierer = aktualisierer
         self._attr_unique_id = eintrag.storage_key
-        self._attr_supported_features = UpdateEntityFeature.INSTALL
+        self._attr_supported_features = (
+            UpdateEntityFeature.INSTALL | UpdateEntityFeature.UNINSTALL
+        )
         self._laeuft_gerade = False
 
     @property
@@ -187,13 +229,17 @@ class HacsLabUpdateEntity(UpdateEntity):
     async def async_install(
         self, version: str | None = None, backup: bool = False
     ) -> None:
-        """Installiert die neueste Version ueber die M4a-Naht.
+        """Installiert die neueste Version: Anhang zuerst, sonst Tag-Archiv.
 
         Eine bestimmte aeltere Version zu waehlen ist bewusst noch nicht
         dabei: der Lauf traegt nur die neueste je Eintrag. Das Feld
         ``version`` wird geprueft und abgewiesen, wenn es nicht die
         neueste ist -- lieber ehrlich meckern als heimlich das Falsche
         installieren.
+
+        Stufe M4b: der Zielweg wird mit der Version zusammen verzeichnet
+        (ohne Weg keine ehrliche Deinstallation), und bei Integrationen
+        landet ein Neustart-Hinweis auf dem Reparatur-Brett.
         """
         fund = self._fund
         if fund is None or fund.fehler is not None or not fund.tag:
@@ -207,17 +253,59 @@ class HacsLabUpdateEntity(UpdateEntity):
         self._laeuft_gerade = True
         self._schreibe()
         try:
-            await installiere_version(
+            pfad = await installiere_version(
                 self.hass, self._forge, self._eintrag_aktuell, fund.tag
             )
         except InstallationsFehler as fehlschlag:
             raise HomeAssistantError(str(fehlschlag)) from fehlschlag
         finally:
             self._laeuft_gerade = False
-        await self._staende.setzen(self._eintrag.storage_key, installiert=fund.neueste)
+        await self._staende.setzen(
+            self._eintrag.storage_key,
+            installiert=fund.neueste,
+            pfad=str(pfad),
+        )
         self._schreibe()
+        _neustart_hinweis(self.hass, self._eintrag_aktuell, fund.neueste, "installation")
         _LOGGER.info(
             "%s auf %s installiert",
             self._eintrag_aktuell.anzeigename,
             fund.neueste,
+        )
+
+    async def async_uninstall(self, version: str | None = None) -> None:
+        """Nimmt eine installierte Version weg -- den verzeichneten Weg.
+
+        Home Assistant ruft das mit der installierten Version; wir
+        nehmen sie entgegen und deinstallieren, was da ist -- mehr als
+        eine Version liegt nie. Ohne verzeichneten Weg (installiert vor
+        M4b oder von Hand veraenderte Ablage) ist die Antwort ehrlich:
+        erst neu installieren, dann laesst sich auch sauber entfernen.
+        """
+        stand = self._staende.stand(self._eintrag.storage_key)
+        if not stand.installiert:
+            raise HomeAssistantError("nichts installiert -- es gibt nichts zu entfernen")
+        if not stand.pfad:
+            raise HomeAssistantError(
+                "kein installierter Pfad verzeichnet (installiert vor M4b?) "
+                "-- einmal neu installieren, dann laesst sich auch "
+                "entfernen"
+            )
+        self._laeuft_gerade = True
+        self._schreibe()
+        try:
+            await deinstalliere_version(self.hass, stand.pfad)
+        except InstallationsFehler as fehlschlag:
+            raise HomeAssistantError(str(fehlschlag)) from fehlschlag
+        finally:
+            self._laeuft_gerade = False
+        await self._staende.setzen(self._eintrag.storage_key, installiert="", pfad="")
+        self._schreibe()
+        _neustart_hinweis(
+            self.hass, self._eintrag_aktuell, stand.installiert, "deinstallation"
+        )
+        _LOGGER.info(
+            "%s (%s) deinstalliert",
+            self._eintrag_aktuell.anzeigename,
+            stand.installiert,
         )

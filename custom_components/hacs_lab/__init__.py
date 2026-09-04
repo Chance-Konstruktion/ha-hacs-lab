@@ -68,7 +68,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await oberflaeche_richten(hass)
     for befehl in BEFEHLE:
         ha_websocket_api.async_register_command(hass, befehl)
+    _neustart_hinweise_aufraeumen(hass)
     return True
+
+
+def _neustart_hinweise_aufraeumen(hass: HomeAssistant) -> None:
+    """M4b: ausstehende Neustart-Hinweise gelten mit diesem Laden als erledigt.
+
+    Die Hinweise entstehen, wenn eine Integration installiert oder
+    deinstalliert wurde (Stufe M4b): Home Assistant laedt
+    ``custom_components`` nur beim Start. Diese Zeile laeuft genau dann,
+    wenn genau das passiert ist -- also ist jeder Neustart-Hinweis damit
+    historisch. Ohne das Stuendchen wuerde der erste Hinweis fuer immer
+    auf dem Reparatur-Brett stehen.
+    """
+    register = issue_registry.async_get(hass)
+    for bereich, kennung in list(register.issues):
+        if bereich == DOMAIN and kennung.startswith("neustart_"):
+            issue_registry.async_delete_issue(hass, DOMAIN, kennung)
 
 
 class HacsLabKoordinator(DataUpdateCoordinator[dict[str, int | str]]):

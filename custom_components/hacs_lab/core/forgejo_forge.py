@@ -169,6 +169,24 @@ class ForgejoForge:
         )
         return await self.http.get_bytes(url)
 
+    async def archiv(self, pfad: str, ref: str) -> bytes:
+        """Das Quell-Archiv einer Version (Stufe M4b-Nachtrag).
+
+        Fehlte hier bislang -- die Naht verlangte sie, die zweite
+        Anbindung lieferte sie nicht. Wer heute aus einem Forgejo-Projekt
+        installiert, bekam einen AttributeError statt einer Version.
+        """
+        return await self.http.get_bytes(await self.archiv_url(pfad, ref))
+
+    async def anhang(self, url: str) -> bytes:
+        """Laedt einen Release-Anhang (Stufe M4b) ueber den HTTP-Zugang.
+
+        Die Adresse stammt aus ``browser_download_url`` eines Release-
+        Assets -- eine Anbieteradresse, also Sitzung und Token wie bei
+        jedem anderen Abruf.
+        """
+        return await self.http.get_bytes(url)
+
     async def archiv_url(self, pfad: str, ref: str) -> str:
         return (
             self.api

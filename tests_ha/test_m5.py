@@ -243,6 +243,10 @@ async def test_installations_dienst_tauscht_die_dateien(
             herzschlag(),
             stammdaten(),
             releases(release_objekt("v1.2.0")),
+            # M4b: die Installation fragt vor dem Archiv noch einmal die
+            # Releases ab -- der Anhang ist die bevorzugte Quelle. Ohne
+            # Anhang (wie hier) faellt sie aufs Tag-Archiv zurueck.
+            releases(release_objekt("v1.2.0")),
             Aufzeichnung(rohbytes=archiv.getvalue(), kopfzeilen={}),
         ]
     )
