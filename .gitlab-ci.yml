@@ -9,6 +9,10 @@
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH
+    # Befund b aus dem !11-Review: der Tag kriegt alle Waechter --
+    # veroeffentlicht wird erst, wenn die Suite gruen ist. Ein v-Tag
+    # auf IRGENDEINEM Commit lief bisher ohne einen einzigen Test.
+    - if: $CI_COMMIT_TAG
 
 workflow:
   rules:
@@ -16,9 +20,9 @@ workflow:
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH
-    # Stufe M10: Tag-Pipelines existieren fuer die Auslieferung. Die
-    # Alltag-Jobs oben bleiben unberuehrt -- ihre Regeln greifen nur
-    # fuer Zweige und Merge Requests, ein Tag loest sie nicht aus.
+    # Stufe M10: Tag-Pipelines existieren fuer die Auslieferung. Seit
+    # dem !11-Nachklapp laufen darauf ALLE Waechter (.ueberall) --
+    # veroeffentlicht wird erst, wenn die Suite gruen ist.
     - if: $CI_COMMIT_TAG
 
 stages:
@@ -125,14 +129,16 @@ tests-ohne-netz:
 
 # --------------------------------------------------------------------
 # Stufe M10 -- Nach draussen. Beide Jobs laufen NUR auf Tags; die
-# Alltag-Pipeline (Zweige, Merge Requests) bleibt unberuehrt.
+# Alltag-Pipeline (Zweige, Merge Requests) bleibt unberuehrt -- aber
+# die Waechter laufen auf dem Tag mit (.ueberall), bevor veroeffent-
+# licht wird.
 #
 # auslieferung baut den ZIP deterministisch aus dem ausgecheckten
 # Stand (reine Standardbibliothek -- darum ohne pip-Installation) und
-# meldet Name, Adresse und Fingerabdruck per dotenv an die
-# Verkuendung weiter. Der Bau verweigert sich, wenn Tag und
-# manifest.json verschiedene Versionen nennen -- ein Release, der im
-# Namen etwas anderes verspricht als er installiert, ist eine Falle.
+# nennt Fingerabdruck und Groesse selbst in der Ausgabe. Der Bau
+# verweigert sich, wenn Tag und manifest.json verschiedene Versionen
+# nennen -- ein Release, der im Namen etwas anderes verspricht als er
+# installiert, ist eine Falle.
 auslieferung:
   stage: auslieferung
   rules:
@@ -140,45 +146,29 @@ auslieferung:
   before_script: []
   script:
     - python auslieferung/release_bauen.py dist --version "${CI_COMMIT_TAG}"
-    - |
-      ZIP_NAME="hacs-lab-v${CI_COMMIT_TAG#v}.zip"
-      ZIP_SHA=$(python -c "
-      from pathlib import Path
-      from auslieferung.release_bauen import fingerabdruck
-      print(fingerabdruck(Path('dist') / '${ZIP_NAME}'))
-      ")
-      echo "ZIP_NAME=${ZIP_NAME}" >> url.env
-      echo "ZIP_URL=${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/dist/${ZIP_NAME}" >> url.env
-      echo "ZIP_SHA=${ZIP_SHA}" >> url.env
   artifacts:
     paths:
       - dist/
-    reports:
-      dotenv: url.env
     expire_in: never
 
-# verkuendigung traegt den Release ins GitLab ein -- der Bot-Weg ueber
-# die release:-Syntax, mit dem Anhang-Link auf den Bau oben. Kann der
-# Runner das release-cli-Image nicht ziehen, bleibt der ZIP trotzdem
-# als Artefakt des Baus greifbar und die Eintragung ist ein API-Aufruf
-# (POST /projects/:id/releases) den Biene oder Imker nachholen --
-# Fingerabdruck und Adresse stehen dann in der Ausgabe des Baus.
+# verkuendigung traegt den Release ins GitLab ein -- seit dem
+# !11-Nachklapp (Befund c) ohne fremdes Image: reine Standard-
+# bibliothek auf dem Bild, das ohnehin laeuft. Das Skript laedt den
+# ZIP per PUT in die Generic Package Registry des Projekts und legt
+# den Eintrag per POST an; beide Aufrufe laufen mit dem JOB-TOKEN
+# dieses Jobs -- er gilt nur fuer diesen Lauf und dieses Projekt,
+# ist kein zu verwahrendes Geheimnis. Der Anhang-Link zeigt auf die
+# Paketadresse (die gilt auch noch, wenn der Job vergangen ist) statt
+# auf /-/jobs/<id>/artifacts/... Bleibt der Eintrag aus, liegt der
+# ZIP trotzdem als Artefakt des Baus bereit, Fingerabdruck und
+# Adresse stehen in dessen Ausgabe.
 verkuendigung:
   stage: auslieferung
   rules:
     - if: $CI_COMMIT_TAG
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
   needs:
     - job: auslieferung
       artifacts: true
   before_script: []
   script:
-    - echo "Verkuendung von ${CI_COMMIT_TAG}"
-  release:
-    tag_name: ${CI_COMMIT_TAG}
-    name: "HACS*lab ${CI_COMMIT_TAG}"
-    description: "Deterministischer Bau aus dem getaggten Stand. SHA-256 des Anhangs: ${ZIP_SHA}"
-    assets:
-      links:
-        - name: "${ZIP_NAME} -- Hand-Installation"
-          url: ${ZIP_URL}
+    - python -m auslieferung.verkuendigen
