@@ -28,7 +28,7 @@ by hand. It takes about two minutes.
 
 **Requirements**
 
-- Home Assistant 2024.6 or newer (the test lane runs against 2025.2)
+- Home Assistant 2025.2 or newer (the test lane runs against 2026.2)
 - A GitLab instance you can reach from your Home Assistant host
 - Optional: a personal access token with `read_api` scope — for private
   repositories or to be gentler on rate limits
@@ -38,7 +38,9 @@ by hand. It takes about two minutes.
 1. Download the release archive `hacs-lab-vX.Y.Z.zip` from the
    [releases page](https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/releases).
    The SHA-256 of the archive is part of every release description — verify
-   it if you like.
+   it if you like. The archive link points into this GitLab's package
+   registry; the project is internal, so downloading needs an account on the
+   instance.
 2. Extract the archive **into your Home Assistant configuration directory**
    (the one that contains `configuration.yaml`). The archive mirrors the
    repository layout, so every folder lands where it belongs: the
@@ -84,7 +86,7 @@ To make a GitLab project findable and installable by HACS*lab:
    {
      "name": "My integration",
      "render_readme": true,
-     "homeassistant": "2024.6.0"
+     "homeassistant": "2025.2.0"
    }
    ```
 
