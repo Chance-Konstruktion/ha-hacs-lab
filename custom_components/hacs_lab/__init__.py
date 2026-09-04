@@ -10,7 +10,11 @@ Kerns an einander.
 Wie diese Integration den Kern findet: ``hacs_lab`` liegt im
 Entwicklungs-Check-out neben ``custom_components``. Beim Lauf aus einem
 ausgepackten Stand liegt es ebenso daneben -- deshalb reicht ein
-einziger Fallback auf das Nachbarverzeichnis. Der endgueltige Vertrieb
+einziger Fallback auf das Nachbarverzeichnis. Der Fallback haengt das
+Verzeichnis hinten an und stellt es nie vorne: vorne gestellt stuende
+es vor der Standardbibliothek, und jede Datei dort -- in einer echten
+Installation ist das ``/config`` -- beschattete stdlib-Module und
+Home Assistant (Nachtrag zu #11). Der endgueltige Vertrieb
 (pip-Paket oder Release-Form) ist Stufe M10.
 """
 
@@ -26,7 +30,11 @@ from pathlib import Path
 if importlib.util.find_spec("hacs_lab") is None:
     # Lauf aus dem Entwicklungs- oder Release-Verzeichnis: der Kern
     # liegt zwei Ebenen hoeher, direkt neben custom_components.
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+    # Hinten anstellen, nie vorne: vorne gestellt beschattete dieses
+    # Verzeichnis die Standardbibliothek und Home Assistant -- jede
+    # Datei im Konfigurationsverzeichnis kaeme beim Import zuerst
+    # (Nachtrag zu #11, Befund a).
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from homeassistant.components import websocket_api as ha_websocket_api
 from homeassistant.config_entries import ConfigEntry
