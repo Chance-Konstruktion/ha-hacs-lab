@@ -157,3 +157,33 @@ async def test_stammdaten_nach_id_keine_ziffern_kein_weg():
 
     with pytest.raises(ForgeFehler):
         await forge(json_antworten={"/projects/": projekt()}).repository_nach_id("../7a")
+
+
+# -- Die Probe im Einrichtungsdialog ---------------------------------
+
+
+@pytest.mark.asyncio
+async def test_grenze_setzt_per_page_und_verbietet_das_blaettern():
+    """``grenze`` muss BEIDES tun. Ein kleineres ``per_page`` allein
+    bremst nichts -- der HTTP-Zugang blaettert sonst weiter, bis die
+    Liste zu Ende ist, und die Probe waere so teuer wie der Abruf."""
+    http = FakeHttp({"/projects": [{"id": 1, "path_with_namespace": "a/b"}]})
+    forge = GitLabForge(http, HOST)
+
+    await forge.suche_nach_topic(grenze=1)
+
+    _, params = http.aufrufe[-1]
+    assert params["per_page"] == "1"
+    assert http.seitenwuensche[-1] == 1
+
+
+@pytest.mark.asyncio
+async def test_ohne_grenze_bleibt_es_beim_vollen_abruf():
+    http = FakeHttp({"/projects": [{"id": 1, "path_with_namespace": "a/b"}]})
+    forge = GitLabForge(http, HOST)
+
+    await forge.suche_nach_topic()
+
+    _, params = http.aufrufe[-1]
+    assert params["per_page"] == "100"
+    assert http.seitenwuensche[-1] is None

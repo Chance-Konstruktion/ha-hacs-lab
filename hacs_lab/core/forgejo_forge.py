@@ -185,6 +185,7 @@ class ForgejoForge:
         topic: str = TOPIC,
         gruppe: str | None = None,
         mit_untergruppen: bool = True,
+        grenze: int | None = None,
     ) -> list[RepositoryInfo]:
         """Alle Projekte, deren Besitzer sie mit ``topic`` gekennzeichnet hat.
 
@@ -199,23 +200,28 @@ class ForgejoForge:
         Forgejo-Organisationen liegen flach, ein Untergruppen-Endpunkt
         existiert nicht.
         """
+        menge = SEITENGROESSE if grenze is None else max(1, grenze)
+        nur_eine = None if grenze is None else 1
         if gruppe:
             kodiert = quote(strip_suffix(gruppe).strip("/"), safe="")
             try:
                 roh = await self._json(
                     self.api + "/orgs/" + kodiert + "/repos",
-                    {"limit": str(SEITENGROESSE)},
+                    {"limit": str(menge)},
+                    seiten=nur_eine,
                 )
             except NichtGefunden:
                 roh = await self._json(
                     self.api + "/users/" + kodiert + "/repos",
-                    {"limit": str(SEITENGROESSE)},
+                    {"limit": str(menge)},
+                    seiten=nur_eine,
                 )
             kandidaten = roh if isinstance(roh, list) else []
         else:
             antwort = await self._json(
                 self.api + "/repos/search",
-                {"q": topic, "limit": str(SEITENGROESSE)},
+                {"q": topic, "limit": str(menge)},
+                seiten=nur_eine,
             )
             if isinstance(antwort, dict):
                 kandidaten = antwort.get("data") or []
@@ -229,7 +235,13 @@ class ForgejoForge:
         ]
 
     # -- intern -------------------------------------------------------
-    async def _json(self, url: str, params: dict[str, str] | None = None):
+    async def _json(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+        *,
+        seiten: int | None = None,
+    ):
         """Wie :meth:`~hacs_lab.core.gitlab_forge.GitLabForge._json`.
 
         Forgejo meldet Fehler als ``{"message": ...}`` ohne Kennung --
@@ -237,7 +249,7 @@ class ForgejoForge:
         :class:`NichtGefunden`, diese Stelle deckt Attrappen und Instanzen
         ab, die es doch als Koerper liefern.
         """
-        antwort = await self.http.get_json(url, params)
+        antwort = await self.http.get_json(url, params, seiten=seiten)
         if (
             isinstance(antwort, dict)
             and "message" in antwort

@@ -111,10 +111,21 @@ class AiohttpClient:
 
     # -- die vereinbarte Schnittstelle --------------------------------
 
-    async def get_json(self, url: str, params: dict[str, str] | None = None):
+    async def get_json(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+        *,
+        seiten: int | None = None,
+    ):
         """Holt JSON; Listen werden ueber ``X-Next-Page`` ganz geholt.
 
         Ein in ``params`` bereits gesetztes ``page`` gilt als Startseite.
+
+        ``seiten`` begrenzt das Weiterblaettern fuer diesen einen Aufruf.
+        ``seiten=1`` holt genau eine Seite. Ohne Angabe gilt weiterhin
+        ``max_seiten`` -- die Obergrenze gegen Endlosschleifen, nicht
+        gegen Menge.
         """
         params = dict(params or {})
         schluessel: _Schluessel = (url, tuple(sorted(params.items())))
@@ -130,11 +141,18 @@ class AiohttpClient:
             naechste = kopf.get("x-next-page", "")
             gesehene_seiten = 1
             while naechste not in ("", "0", None):
+                if seiten is not None and gesehene_seiten >= seiten:
+                    # Die gewollte Grenze ist erreicht. Kein Fehler:
+                    # der Aufrufer hat genau das bestellt.
+                    break
                 if naechste == params.get("page"):
                     raise ForgeFehler(
                         f"Seitennummer von {url} wiederholt sich: {naechste!r}"
                     )
                 if gesehene_seiten >= self.max_seiten:
+                    # Die Notbremse gegen Endlosschleifen bleibt scharf --
+                    # wer keine Grenze nennt, will die ganze Liste, und eine
+                    # Liste ohne Ende ist ein Fehler, kein Ergebnis.
                     raise ForgeFehler(f"{url} liefert mehr als {self.max_seiten} Seiten")
                 params["page"] = naechste
                 antwort, kopf = await self._anfordern(url, params, self._kopfzeilen)

@@ -63,7 +63,20 @@ class HttpClient(Protocol):
     keine Statuscodes und keine HTTP-Bibliothek.
     """
 
-    async def get_json(self, url: str, params: dict[str, str] | None = None): ...
+    async def get_json(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+        *,
+        seiten: int | None = None,
+    ):
+        """``seiten`` begrenzt das Verfolgen von Folgeseiten.
+
+        Ohne Angabe wird die Liste vollstaendig geholt. ``seiten=1``
+        heisst: genau eine Seite, kein Weiterblaettern. Das braucht
+        jede Stelle, die nur wissen will *ob* etwas antwortet --
+        eine Probe darf nicht so teuer sein wie die Sache selbst.
+        """
 
     async def get_bytes(self, url: str) -> bytes: ...
 
@@ -116,6 +129,16 @@ class Forge(Protocol):
         """Adresse des Quell-Archivs fuer eine Version."""
 
     async def suche_nach_topic(
-        self, topic: str, gruppe: str | None = None, mit_untergruppen: bool = True
+        self,
+        topic: str,
+        gruppe: str | None = None,
+        mit_untergruppen: bool = True,
+        grenze: int | None = None,
     ) -> list[RepositoryInfo]:
-        """Alle Projekte, deren Besitzer sie mit ``topic`` gekennzeichnet hat."""
+        """Alle Projekte, deren Besitzer sie mit ``topic`` gekennzeichnet hat.
+
+        ``grenze`` deckelt den Abruf: hoechstens so viele Eintraege,
+        genau eine Seite. Gedacht fuer die Pruefverbindung im
+        Einrichtungsdialog -- die will beweisen, dass Host, API und
+        Token stimmen, und nicht die halbe Instanz herunterladen.
+        """

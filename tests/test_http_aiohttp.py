@@ -403,3 +403,59 @@ async def test_echte_etag_und_304():
     zweite = await k.get_json(ECHT_URL, params)
     assert zweite == erste == SEITE_2
     assert sitzung.abrufe[1][2]["If-None-Match"] == KOPFZEILEN_SEITE_2["etag"]
+
+
+# -- Seitengrenze ----------------------------------------------------
+#
+# Der Seitenverfolger ist richtig, solange jemand die ganze Liste will.
+# Wer nur wissen will, OB eine Instanz antwortet, will das nicht: gegen
+# eine grosse Instanz kostete eine Probe sonst zwanzigtausend Projekte
+# (Issue #11, Befund b).
+
+
+@pytest.mark.asyncio
+async def test_seiten_eins_holt_genau_eine_seite():
+    """Mit ``seiten=1`` wird nicht weitergeblaettert -- auch nicht, wenn
+    der Anbieter ausdruecklich eine Folgeseite anbietet."""
+    k, sitzung, _ = klient(
+        [
+            antwort([{"id": 1}], kopfzeilen={"X-Next-Page": "2"}),
+            antwort([{"id": 2}], kopfzeilen={"X-Next-Page": ""}),
+        ]
+    )
+    daten = await k.get_json(URL, seiten=1)
+
+    assert daten == [{"id": 1}]
+    assert len(sitzung.abrufe) == 1, "es darf genau eine Anfrage rausgehen"
+
+
+@pytest.mark.asyncio
+async def test_ohne_grenze_wird_weiterhin_alles_geholt():
+    """Die Vorgabe bleibt, wie sie war -- die Grenze ist ein Zusatz,
+    keine Verhaltensaenderung."""
+    k, sitzung, _ = klient(
+        [
+            antwort([{"id": 1}], kopfzeilen={"X-Next-Page": "2"}),
+            antwort([{"id": 2}], kopfzeilen={"X-Next-Page": ""}),
+        ]
+    )
+    daten = await k.get_json(URL)
+
+    assert daten == [{"id": 1}, {"id": 2}]
+    assert len(sitzung.abrufe) == 2
+
+
+@pytest.mark.asyncio
+async def test_grenze_zwei_holt_zwei_seiten_und_hoert_dann_auf():
+    """Aufhoeren ist gewollt und leise: kein Fehler, nur Schluss."""
+    k, sitzung, _ = klient(
+        [
+            antwort([1], kopfzeilen={"X-Next-Page": "2"}),
+            antwort([2], kopfzeilen={"X-Next-Page": "3"}),
+            antwort([3], kopfzeilen={"X-Next-Page": ""}),
+        ]
+    )
+    daten = await k.get_json(URL, seiten=2)
+
+    assert daten == [1, 2]
+    assert len(sitzung.abrufe) == 2
