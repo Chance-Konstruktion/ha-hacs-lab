@@ -32,6 +32,7 @@ const TEXTE = {
     entwicklung: "auch hacs-development",
     hinzufuegen: "Hinzufügen",
     entfernen: "Entfernen",
+    deinstallieren: "Deinstallieren",
     installieren: "Installieren",
     update_install: "Aktualisieren",
     details: "Details",
@@ -51,9 +52,13 @@ const TEXTE = {
     sterne_ein: "Stern",
     sterne_viele: "Sterne",
     kategorie: "Kategorie",
-    entfernt_hinweis: "Nur die Beobachtung — Dateien bleiben liegen (Stufe M4).",
+    entfernt_hinweis: "Nur die Beobachtung — Dateien bleiben (Deinstallieren ist der eigene Knopf).",
     entfernen_frage: (name) =>
       `${name} entfernen? Installierte Dateien bleiben liegen.`,
+    deinstalliert_hinweis:
+      "Nimmt die installierten Dateien weg — bei Integrationen steht der nötige Neustart im Reparatur-Brett.",
+    deinstallieren_frage: (name) =>
+      `${name} deinstallieren? Die installierten Dateien werden entfernt.`,
     fehler: {
       unbekannte_instanz: "Diese Instanz ist nicht (mehr) eingerichtet.",
       nicht_gefunden: "Repository nicht gefunden — Adresse prüfen.",
@@ -80,6 +85,7 @@ const TEXTE = {
     entwicklung: "include hacs-development",
     hinzufuegen: "Add",
     entfernen: "Remove",
+    deinstallieren: "Uninstall",
     installieren: "Install",
     update_install: "Update",
     details: "Details",
@@ -99,8 +105,12 @@ const TEXTE = {
     sterne_ein: "star",
     sterne_viele: "stars",
     kategorie: "Category",
-    entfernt_hinweis: "Only the watch — files stay in place (M4).",
+    entfernt_hinweis: "Only the watch — files stay in place (uninstall is its own button).",
     entfernen_frage: (name) => `Remove ${name}? Installed files stay in place.`,
+    deinstalliert_hinweis:
+      "Takes the installed files away — for integrations the required restart shows up in the repair center.",
+    deinstallieren_frage: (name) =>
+      `Uninstall ${name}? The installed files will be removed.`,
     fehler: {
       unbekannte_instanz: "This instance is not configured (any more).",
       nicht_gefunden: "Repository not found — check the address.",
@@ -334,7 +344,7 @@ class HacsLabPanel extends HTMLElement {
     if (code && t.fehler[code] !== undefined) {
       return t.fehler[code];
     }
-    if (fehler && fehler.message && !code) {
+    if (fehler && fehler.message) {
       return t.fehler.sonst + " (" + fehler.message + ")";
     }
     if (typeof fehler === "string" && fehler) {
@@ -445,6 +455,30 @@ class HacsLabPanel extends HTMLElement {
     try {
       await this._hass.callWS({
         type: "hacs_lab/entfernen",
+        storage_key: eintrag.storage_key,
+      });
+      this._fehler = "";
+    } catch (fehler) {
+      this._fehler = this._fehlertext(fehler);
+    }
+    await this._lade();
+    this._beschaeftigt = false;
+    this._zeichne();
+  }
+
+  /** Deinstallieren -- Dateien weg, den verzeichneten Weg (Stufe M4b). */
+  async _deinstallieren(eintrag) {
+    const bestaetigt = window.confirm(
+      this._t.deinstallieren_frage(eintrag.name)
+    );
+    if (!bestaetigt) {
+      return;
+    }
+    this._beschaeftigt = true;
+    this._zeichne();
+    try {
+      await this._hass.callWS({
+        type: "hacs_lab/deinstallieren",
         storage_key: eintrag.storage_key,
       });
       this._fehler = "";
@@ -621,6 +655,11 @@ class HacsLabPanel extends HTMLElement {
               ? `<button class="hl-knopf hl-primaer" data-aktion="install" data-key="${fliehe(e.storage_key)}">${fliehe(t.installieren)}</button>`
               : ""
           }
+          ${
+            e.installiert
+              ? `<button class="hl-knopf" data-aktion="deinstallieren" title="${fliehe(t.deinstalliert_hinweis)}" data-key="${fliehe(e.storage_key)}">${fliehe(t.deinstallieren)}</button>`
+              : ""
+          }
           <button class="hl-knopf" data-aktion="entfernen" title="${fliehe(t.entfernt_hinweis)}" data-key="${fliehe(e.storage_key)}">${fliehe(t.entfernen)}</button>
         </div>
       </div>`;
@@ -749,6 +788,8 @@ class HacsLabPanel extends HTMLElement {
           this._installieren(eintrag);
         } else if (aktion === "entfernen" && eintrag) {
           this._entfernen(eintrag);
+        } else if (aktion === "deinstallieren" && eintrag) {
+          this._deinstallieren(eintrag);
         } else if (aktion === "hinzufuegen") {
           const wahl = wurzel.querySelector(
             `select[data-rolle="kategorie"][data-pfad="${CSS.escape(knopf.dataset.pfad)}"]`

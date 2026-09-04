@@ -2,13 +2,18 @@
 
 Alles offline: die Sitzungs-Attrappe spielt die GitLab-Antworten in
 Reihenfolge ab (Richten, erster Lauf, dann was der einzelne Test
-anstoesst). Der clou dieser Datei ist der Dogfood-Beweis: der
+anstoesst). Der Clou dieser Datei ist der Dogfood-Beweis: der
 Release-Anhang ist das ECHTE, mit ``auslieferung/release_bauen.py``
 aus diesem Repository gebaute ZIP -- die Abnahme «eine echte
 Integration aus dem eigenen GitLab laeuft nach der Installation in
 HA» wird hier mit dem eigenen Release gefahren: die gleiche
 Integration, die diesen Test gerade als laufende Instanz abwickelt,
 liegt danach als Dateien im Konfigurationsverzeichnis.
+
+Deinstallation geht durch den Panel-Befehl ``hacs_lab/deinstallieren``
+(WebSocket): Home Assistants update-Entities kennen kein
+Uninstall-Konzept, also ist es hier ein Befehl und kein Dienst von
+ihnen.
 """
 
 from __future__ import annotations
@@ -130,6 +135,12 @@ def update_entity_id(hass: HomeAssistant) -> str:
     ids = sorted(hass.states.async_entity_ids("update"))
     assert len(ids) == 1, f"eine update-Entity erwartet, gefunden: {ids}"
     return ids[0]
+
+
+async def frage(client, kennung: int, typ: str, **felder):
+    """Eine WebSocket-Nachricht hin und die Antwort zurueck."""
+    await client.send_json({"id": kennung, "type": typ, **felder})
+    return await client.receive_json()
 
 
 def neustart_issues(hass: HomeAssistant) -> list[str]:
@@ -276,9 +287,13 @@ async def test_eigener_release_installiert_sich_selbst(
 
 
 async def test_deinstallation_raeumt_genau_den_weg(
-    hass: HomeAssistant, sitzung_einpflanzen, hass_storage
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
 ) -> None:
-    """Installieren, entfernen: das Ziel ist weg, der Rest bleibt."""
+    """Installieren, deinstallieren: das Ziel ist weg, der Rest bleibt.
+
+    Home Assistants update-Entities kennen kein Uninstall -- der Weg
+    hier ist der Panel-Befehl ``hacs_lab/deinstallieren``.
+    """
     speichern(hass_storage, [eintrag_daten()])
     nachbar = Path(hass.config.config_dir) / "custom_components" / "andere"
     nachbar.mkdir(parents=True)
@@ -294,6 +309,8 @@ async def test_deinstallation_raeumt_genau_den_weg(
         ]
     )
     await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
     await hass.services.async_call(
         "update",
         "install",
@@ -302,12 +319,9 @@ async def test_deinstallation_raeumt_genau_den_weg(
     )
     await hass.async_block_till_done()
 
-    await hass.services.async_call(
-        "update",
-        "uninstall",
-        {"entity_id": update_entity_id(hass)},
-        blocking=True,
-    )
+    antwort = await frage(client, 1, "hacs_lab/deinstallieren", storage_key=STORAGE_KEY)
+    assert antwort["success"], antwort
+    assert antwort["result"]["deinstalliert"] == "foo/bar*lab"
     await hass.async_block_till_done()
 
     ziel = Path(hass.config.config_dir) / "custom_components" / "beispiel_integration"
@@ -320,10 +334,12 @@ async def test_deinstallation_raeumt_genau_den_weg(
 
     nachher = hass.states.get(update_entity_id(hass))
     assert nachher.attributes["installed_version"] is None
+    # Integration deinstalliert: der Neustart-Hinweis steht da.
+    assert neustart_issues(hass) == ["neustart_" + _kennung(STORAGE_KEY)]
 
 
 async def test_deinstallation_ohne_weg_ist_ehrlich(
-    hass: HomeAssistant, sitzung_einpflanzen, hass_storage
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
 ) -> None:
     """Vor M4b installiert: kein Weg verzeichnet -- klare Ansage."""
     speichern(
@@ -333,18 +349,27 @@ async def test_deinstallation_ohne_weg_ist_ehrlich(
     )
     sitzung_einpflanzen([herzschlag(), stammdaten(), releases(release_objekt("v1.2.0"))])
     await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
 
-    try:
-        await hass.services.async_call(
-            "update",
-            "uninstall",
-            {"entity_id": update_entity_id(hass)},
-            blocking=True,
-        )
-        ergebnis = "kein Fehler"
-    except Exception as fehlschlag:  # noqa: BLE001 -- HomeAssistantError erwartet
-        ergebnis = str(fehlschlag)
-    assert "kein installierter Pfad verzeichnet" in ergebnis
+    antwort = await frage(client, 1, "hacs_lab/deinstallieren", storage_key=STORAGE_KEY)
+    assert not antwort["success"]
+    assert "kein installierter Pfad verzeichnet" in antwort["error"]["message"]
+
+
+async def test_deinstallation_unbekannter_eintrag(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
+) -> None:
+    """Ein Schluessel aus keiner Liste bekommt seine klare Absage."""
+    speichern(hass_storage, [eintrag_daten()])
+    sitzung_einpflanzen([herzschlag(), stammdaten(), releases(release_objekt("v1.2.0"))])
+    await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
+    antwort = await frage(
+        client, 1, "hacs_lab/deinstallieren", storage_key="gitlab@example:1"
+    )
+    assert not antwort["success"]
+    assert "steht in keiner Liste" in antwort["error"]["message"]
 
 
 # ------------------------------------------------ Neustart-Hinweis

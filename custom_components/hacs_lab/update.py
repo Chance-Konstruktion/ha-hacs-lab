@@ -1,12 +1,14 @@
 """Update-Entities je Eintrag -- Stufe M5, die sichtbare Seite.
 
 Jedes beobachtete Custom Repository bekommt eine ``update``-Entity:
-installierte Version, neueste Version, Release-Notizen, einen
+installierte Version, neueste Version, Release-Notizen, und einen
 ``install``-Dienst, der den Release-Anhang (sonst das Archiv des Tags)
-ueber die Naht an den Zielort tauscht (siehe :mod:`.installation`),
-und seit M4b einen ``uninstall``-Dienst, der genau diesen Weg wieder
-nimmt. Integrationen bekommen danach einen Neustart-Hinweis aufs
-Reparatur-Brett -- Home Assistant laedt sie nur beim Start. Neue
+ueber die Naht an den Zielort tauscht (siehe :mod:`.installation`).
+Deinstallation ist bewusst KEIN update-Dienst: Home Assistants update-
+Entities kennen kein Uninstall-Konzept -- der Befehl
+``hacs_lab/deinstallieren`` (WebSocket, das Panel ruft ihn) nimmt den
+verzeichneten Zielweg wieder. Integrationen bekommen danach einen
+Neustart-Hinweis aufs Reparatur-Brett (siehe :mod:`.neustart`). Neue
 Eintraege erscheinen ohne Neustart als Entity, entfernte verschwinden
 -- genau das verlangt die Abnahme: «ein neues Release im GitLab
 erscheint ohne Zutun in HA».
@@ -21,18 +23,13 @@ from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import issue_registry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.issue_registry import IssueSeverity
 
-from .aktualisierer import HacsLabAktualisierer, _kennung, hole_aktualisierer
+from .aktualisierer import HacsLabAktualisierer, hole_aktualisierer
 from .const import DOMAIN
 from .core.aktualisierungen import Fund
-from .installation import (
-    InstallationsFehler,
-    deinstalliere_version,
-    installiere_version,
-)
+from .installation import InstallationsFehler, installiere_version
+from .neustart import neustart_hinweis
 
 if TYPE_CHECKING:
     from . import Laufzeit
@@ -42,37 +39,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def _neustart_hinweis(
-    hass: HomeAssistant, eintrag: Eintrag, version: str, aktion: str
-) -> None:
-    """M4b: Integrationen brauchen einen Neustart, um wirksam zu werden.
-
-    Home Assistant laedt ``custom_components`` beim Start -- Dateien,
-    die danach erscheinen oder verschwinden, aendern am laufenden
-    nichts. Genau das steht als Hinweis auf dem Reparatur-Brett, solange
-    bis der Neustart passiert ist: das Laden der Komponente entfernt
-    jeden Neustart-Hinweis (wer laeuft, ist neu gestartet). Andere
-    Kategorien (Themes, Plugins, Skripte) brauchen keinen Neustart --
-    dort bleibt das Brett still, das ist Physik, nicht Nachlaessigkeit.
-    """
-    if eintrag.kategorie != "integration":
-        return
-    issue_registry.async_create_issue(
-        hass,
-        DOMAIN,
-        "neustart_" + _kennung(eintrag.storage_key),
-        is_fixable=False,
-        severity=IssueSeverity.WARNING,
-        translation_key="neustart_nach_installation",
-        translation_placeholders={
-            "name": eintrag.anzeigename,
-            "version": version,
-            "aktion": aktion,
-        },
-    )
-
-
-async def async_setup_entry(
+def async_setup_entry(
     hass: HomeAssistant,
     eintrag: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
@@ -138,9 +105,7 @@ class HacsLabUpdateEntity(UpdateEntity):
         self._eintrag = eintrag
         self._aktualisierer = aktualisierer
         self._attr_unique_id = eintrag.storage_key
-        self._attr_supported_features = (
-            UpdateEntityFeature.INSTALL | UpdateEntityFeature.UNINSTALL
-        )
+        self._attr_supported_features = UpdateEntityFeature.INSTALL
         self._laeuft_gerade = False
 
     @property
@@ -266,46 +231,9 @@ class HacsLabUpdateEntity(UpdateEntity):
             pfad=str(pfad),
         )
         self._schreibe()
-        _neustart_hinweis(self.hass, self._eintrag_aktuell, fund.neueste, "installation")
+        neustart_hinweis(self.hass, self._eintrag_aktuell, fund.neueste, "installation")
         _LOGGER.info(
             "%s auf %s installiert",
             self._eintrag_aktuell.anzeigename,
             fund.neueste,
-        )
-
-    async def async_uninstall(self, version: str | None = None) -> None:
-        """Nimmt eine installierte Version weg -- den verzeichneten Weg.
-
-        Home Assistant ruft das mit der installierten Version; wir
-        nehmen sie entgegen und deinstallieren, was da ist -- mehr als
-        eine Version liegt nie. Ohne verzeichneten Weg (installiert vor
-        M4b oder von Hand veraenderte Ablage) ist die Antwort ehrlich:
-        erst neu installieren, dann laesst sich auch sauber entfernen.
-        """
-        stand = self._staende.stand(self._eintrag.storage_key)
-        if not stand.installiert:
-            raise HomeAssistantError("nichts installiert -- es gibt nichts zu entfernen")
-        if not stand.pfad:
-            raise HomeAssistantError(
-                "kein installierter Pfad verzeichnet (installiert vor M4b?) "
-                "-- einmal neu installieren, dann laesst sich auch "
-                "entfernen"
-            )
-        self._laeuft_gerade = True
-        self._schreibe()
-        try:
-            await deinstalliere_version(self.hass, stand.pfad)
-        except InstallationsFehler as fehlschlag:
-            raise HomeAssistantError(str(fehlschlag)) from fehlschlag
-        finally:
-            self._laeuft_gerade = False
-        await self._staende.setzen(self._eintrag.storage_key, installiert="", pfad="")
-        self._schreibe()
-        _neustart_hinweis(
-            self.hass, self._eintrag_aktuell, stand.installiert, "deinstallation"
-        )
-        _LOGGER.info(
-            "%s (%s) deinstalliert",
-            self._eintrag_aktuell.anzeigename,
-            stand.installiert,
         )
