@@ -58,6 +58,16 @@ by hand. It takes about two minutes.
 > The setup dialog currently speaks German; English UI strings are on the
 > roadmap. The panel itself already carries both languages.
 
+> **Upgrading from v0.1.0?** That archive shipped an import layout that
+> breaks the setup dialog with `No module named 'hacs_lab'` — the config
+> flow reached for a top-level package that Home Assistant never
+> provides. Remove **both** leftovers from your configuration directory
+> first: `custom_components/hacs_lab/` **and** the stray top-level
+> `hacs_lab/` folder the old archive dropped next to it. Then extract the
+> v0.1.1 archive (one folder, core included) and restart. Since v0.1.1
+> the integration also carries its icon (`mdi:flask`) in the settings
+> page — `icon.svg` in this repository is the source of it.
+
 ## Using HACS*lab
 
 - **Add a custom repository:** open the panel, choose *Add*, paste the
@@ -120,8 +130,10 @@ atomically, rolled back on failure.
 ## Repository layout
 
 ```
+icon.svg                      project icon — flask, liquid, sparkle
+hacs.json                     repository conventions for HACS*lab itself
 custom_components/hacs_lab/   the integration — thin Home Assistant layer
-  manifest.json               domain, version, config flow
+  manifest.json               domain, version, config flow, icon
   config_flow.py              setup dialog with connection check
   frontend/panel.js           the sidebar panel (no YAML)
   translations/               dialog texts

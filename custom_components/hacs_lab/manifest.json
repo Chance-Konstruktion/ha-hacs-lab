@@ -1,7 +1,7 @@
 {
   "domain": "hacs_lab",
   "name": "HACS*lab",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "documentation": "https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab",
   "issue_tracker": "https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/issues",
   "codeowners": [
@@ -9,6 +9,7 @@
     "@super-z"
   ],
   "config_flow": true,
+  "icon": "mdi:flask",
   "iot_class": "cloud_polling",
   "requirements": []
 }
