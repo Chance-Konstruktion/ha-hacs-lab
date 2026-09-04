@@ -168,6 +168,9 @@ class Eintraege:
         self._ablage = ablage
         self._liste: list[Eintrag] = []
         self._beobachter: list[Callable[[str, Eintrag], None]] = []
+        #: Wie viele gespeicherte Formen beim letzten Lesen unlesbar
+        #: waren und daher fehlen (Stufe M8: Reparatur-Meldung).
+        self.unlesbar = 0
 
     def melde_aenderungen(self, beobachter: Callable[[str, Eintrag], None]) -> None:
         """Laesst sich rufen, wenn die Liste waechst oder schrumpft.
@@ -186,12 +189,18 @@ class Eintraege:
 
     @classmethod
     async def aus_ablage(cls, ablage: Ablage) -> Eintraege:
-        """Laedt die Liste; unlesbare und doppelte Eintraege entfallen."""
+        """Laedt die Liste; unlesbare und doppelte Eintraege entfallen.
+
+        Wie viele unlesbare Formen uebersprungen wurden, steht danach
+        in :attr:`unlesbar` -- die Meldung dafuer ist Stufe M8 und
+        gehoert dem Richten des Eintrags, nicht der Liste.
+        """
         self = cls(ablage)
         daten = await ablage.laden()
         for roh in daten.get("eintraege") or []:
             eintrag = Eintrag.aus_dict(roh)
             if eintrag is None:
+                self.unlesbar += 1
                 continue
             if self._finde(eintrag.storage_key) is None:
                 self._liste.append(eintrag)
@@ -212,6 +221,44 @@ class Eintraege:
             if eintrag.storage_key == storage_key:
                 return eintrag
         return None
+
+    def finde(self, storage_key: str) -> Eintrag | None:
+        """Der Eintrag zu diesem Schluessel -- oder None.
+
+        Oeffentlich seit Stufe M8: die Waben zeigen Namen und Kategorie
+        aus der Liste, damit ein nachgezogener Name sofort erscheint,
+        nicht erst nach einem Neustart.
+        """
+        return self._finde(storage_key)
+
+    async def nachziehen(self, storage_key: str, neuer_pfad: str) -> Eintrag | None:
+        """Ersetzt den Namen eines Eintrags -- die Identitaet traegt (Stufe M8).
+
+        Ein umbenanntes Projekt bleibt dasselbe: Anbieter, Host und
+        ID unangetastet, nur der Name zieht nach. Der Schluessel aendert
+        sich nicht -- Entities und Staende bleiben, wo sie sind. Die
+        Beobachter hoeren ``nachgezogen`` mit dem NEUEN Eintrag.
+        """
+        alt = self._finde(storage_key)
+        if alt is None:
+            return None
+        if neuer_pfad == alt.identitaet.full_name:
+            return alt
+        neu = Eintrag(
+            identitaet=RepositoryIdentity(
+                provider=alt.identitaet.provider,
+                host=alt.identitaet.host,
+                provider_id=alt.identitaet.provider_id,
+                full_name=neuer_pfad,
+            ),
+            kategorie=alt.kategorie,
+            hinzugefuegt_am=alt.hinzugefuegt_am,
+        )
+        stelle = self._liste.index(alt)
+        self._liste[stelle] = neu
+        await self._sichern()
+        self._melden("nachgezogen", neu)
+        return neu
 
     def vorhanden(self, storage_key: str) -> bool:
         """Steht genau dieses Repository (Anbieter, Host, ID) in der Liste?"""

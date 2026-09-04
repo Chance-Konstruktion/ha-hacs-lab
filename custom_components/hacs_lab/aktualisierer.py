@@ -35,20 +35,21 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from hacs_lab.core.aktualisierungen import Fund, Pruefauftrag, lauf
-from hacs_lab.core.forge import ForgeFehler
+from hacs_lab.core.forge import ForgeFehler, RepositoryInfo
 
 from .const import (
     CONF_ABSTAND_MINUTEN,
     DOMAIN,
     STANDARD_ABSTAND_MINUTEN,
 )
+from .eintraege import kategorie_aus_topics
 from .stand import Staende
 
 if TYPE_CHECKING:
     from hacs_lab.core.gitlab_forge import GitLabForge
 
     from . import Laufzeit
-    from .eintraege import Eintraege
+    from .eintraege import Eintraege, Eintrag
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +91,9 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
         self.forge = forge
         self.eintraege = eintraege
         self.staende = staende
+        #: Issue-Kennungen, die dieser Aktualisierer selbst erzeugt hat
+        #: (Stufe M8: verwaiste Meldungen wieder mitnehmen).
+        self._gemeldete: set[str] = set()
 
     async def _async_update_data(self) -> dict[str, Fund]:
         """Alle Eintraege pruefen; Instanz-Fehler werden Wiederholung.
@@ -98,11 +102,20 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
         genau das verlangt die Roadmap (der Lauf der anderen bricht
         nicht ab). Scheitert ALLES, liegt es an der Instanz oder am
         Netz, und der Takt versuch es erneut wie der Herzschlag auch.
+
+        Stufe M8, zweiter Bauabschnitt: Vor dem Lauf werden je Eintrag
+        die Stammdaten ueber die ID geholt (der ETag-Zwischenspeicher
+        macht die Wiederholung billig). Gelingt das, traegt die ID den
+        aktuellen Namen -- der Lauf prueft gleich unter der neuen
+        Adresse, und ein umbenanntes Projekt wird nachgezogen, statt
+        verschwunden zu wirken. Danach prueft jeder Fund die Kategorie
+        gegen die Aussage des Besitzers im Topic.
         """
+        stammdaten = await self._stammdaten_holen()
         auftraege = [
             Pruefauftrag(
                 schluessel=eintrag.storage_key,
-                pfad=eintrag.identitaet.full_name,
+                pfad=self._pfad_fuer(eintrag, stammdaten),
                 installiert=self.staende.stand(eintrag.storage_key).installiert,
                 mit_vorabversionen=(
                     self.staende.stand(eintrag.storage_key).vorabversionen
@@ -110,6 +123,7 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
             )
             for eintrag in self.eintraege.alle()
         ]
+        self._verwaiste_reparaturen_aufraeumen()
         if not auftraege:
             return {}
 
@@ -130,8 +144,116 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
             self._melde_token_problem(fehlerfunde[0].fehler or "")
             raise UpdateFailed(fehlerfunde[0].fehler or "alle Eintraege gescheitert")
 
+        await self._bestand_pflegen(stammdaten)
         self._reparaturen_ableiten(funde)
         return funde
+
+    async def _stammdaten_holen(self) -> dict[str, RepositoryInfo | None]:
+        """Stammdaten je Eintrag ueber die ID -- der stabile Weg (Stufe M8).
+
+        Misslingt eine Abfrage (Netz, Rechte, geloeschtes Projekt),
+        steht ``None`` dahinter: der Lauf greift dann auf den
+        gespeicherten Pfad zurueck. Stammdaten sind Zusatzwissen, kein
+        Fundament -- ihr Ausfall darf den Lauf nicht umwerfen, ihr
+        Erfolg macht ihn aber aktuell. Ueber den ETag-Zwischenspeicher
+        des HTTP-Zugangs kostet ein unveraendertes Projekt je Lauf
+        kaum mehr als einen leeren 304.
+        """
+        stammdaten: dict[str, RepositoryInfo | None] = {}
+        for eintrag in self.eintraege.alle():
+            try:
+                info = await self.forge.repository_nach_id(eintrag.identitaet.provider_id)
+                if str(info.provider_id) != str(eintrag.identitaet.provider_id):
+                    _LOGGER.warning(
+                        "Stammdaten zu %s melden eine andere ID (%s) -- ignoriert",
+                        eintrag.storage_key,
+                        info.provider_id,
+                    )
+                    info = None
+            except Exception as fehler:  # noqa: BLE001 - Zusatzwissen, s. o.
+                _LOGGER.debug(
+                    "Stammdaten zu %s gescheitert: %s", eintrag.storage_key, fehler
+                )
+                info = None
+            stammdaten[eintrag.storage_key] = info
+        return stammdaten
+
+    def _pfad_fuer(
+        self, eintrag: Eintrag, stammdaten: dict[str, RepositoryInfo | None]
+    ) -> str:
+        """Der Pfad des Laufs: der aktuelle Name, sonst der gespeicherte."""
+        info = stammdaten.get(eintrag.storage_key)
+        if info is not None and info.full_name:
+            return info.full_name
+        return eintrag.identitaet.full_name
+
+    async def _bestand_pflegen(
+        self, stammdaten: dict[str, RepositoryInfo | None]
+    ) -> None:
+        """Zieht umbenannte Projekte nach und prueft die Kategorie (Stufe M8).
+
+        Zwei Dinge, die der Besitzer eines Projekts ohne unser Zutun
+        aendern kann: den Namen und die Aussage zur Kategorie. Der Name
+        ist Kosmetik mit Folgen (Adresse!) und wird still nachgezogen
+        -- die ID traegt. Die Kategorie ist eine Absicht: passt sie
+        nicht mehr zur gespeicherten, steht das als Reparatur-Meldung
+        auf dem Brett, bis es wieder passt oder der Mensch entscheidet.
+        """
+        for schluessel, info in stammdaten.items():
+            eintrag = self.eintraege.finde(schluessel)
+            if eintrag is None or info is None:
+                continue
+            if info.full_name and info.full_name != eintrag.identitaet.full_name:
+                alter_name = eintrag.identitaet.full_name
+                neu = await self.eintraege.nachziehen(schluessel, info.full_name)
+                _LOGGER.info(
+                    "Projekt umbenannt, Name nachgezogen: %s -> %s",
+                    alter_name,
+                    neu.identitaet.full_name if neu else info.full_name,
+                )
+                eintrag = neu or eintrag
+            kennung = _kennung(schluessel)
+            meldung = "kategorie_gendert_" + kennung
+            behauptet = kategorie_aus_topics(info.topics)
+            if behauptet is not None and behauptet != eintrag.kategorie:
+                issue_registry.async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    meldung,
+                    is_fixable=False,
+                    severity=IssueSeverity.WARNING,
+                    translation_key="kategorie_gendert",
+                    translation_placeholders={
+                        "name": eintrag.anzeigename,
+                        "alte": eintrag.kategorie,
+                        "neue": behauptet,
+                    },
+                )
+                self._gemeldete.add(meldung)
+            else:
+                issue_registry.async_delete_issue(self.hass, DOMAIN, meldung)
+                self._gemeldete.discard(meldung)
+
+    def _verwaiste_reparaturen_aufraeumen(self) -> None:
+        """Meldungen zu Eintraegen, die nicht mehr existieren, verschwinden.
+
+        Jede Meldung traegt die Kennung ihres Eintrags. Verschwindet der
+        Eintrag aus der Liste, wuerde seine Meldung sonst fuer immer auf
+        dem Brett stehen -- hier wird sie mitgenommen. Nur die eigenen
+        Kennungen dieses Hosts werden angeruehrt: andere Instanzen
+        pflegen ihre Meldungen selbst.
+        """
+        gueltig = {_kennung(eintrag.storage_key) for eintrag in self.eintraege.alle()}
+        vorspruch = _kennung(self.forge.provider + "@" + self.forge.host + ":")
+        for meldung in list(self._gemeldete):
+            kennung = ""
+            for anfang in ("repo_verschwunden_", "repo_krank_", "kategorie_gendert_"):
+                if meldung.startswith(anfang):
+                    kennung = meldung[len(anfang) :]
+                    break
+            if kennung and kennung.startswith(vorspruch) and kennung not in gueltig:
+                issue_registry.async_delete_issue(self.hass, DOMAIN, meldung)
+                self._gemeldete.discard(meldung)
 
     def _melde_token_problem(self, grund: str) -> None:
         """Stufe M8: ein Token-Problem ist eine Reparatur-Meldung wert.
@@ -167,6 +289,8 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
             if fund.fehler is None:
                 issue_registry.async_delete_issue(self.hass, DOMAIN, krank)
                 issue_registry.async_delete_issue(self.hass, DOMAIN, verschwunden)
+                self._gemeldete.discard(krank)
+                self._gemeldete.discard(verschwunden)
             elif "nicht gefunden" in fund.fehler:
                 issue_registry.async_delete_issue(self.hass, DOMAIN, krank)
                 issue_registry.async_create_issue(
@@ -178,6 +302,7 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
                     translation_key="repo_verschwunden",
                     translation_placeholders={"name": schluessel, "grund": fund.fehler},
                 )
+                self._gemeldete.add(verschwunden)
             else:
                 issue_registry.async_delete_issue(self.hass, DOMAIN, verschwunden)
                 issue_registry.async_create_issue(
@@ -189,6 +314,7 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
                     translation_key="repo_krank",
                     translation_placeholders={"name": schluessel, "grund": fund.fehler},
                 )
+                self._gemeldete.add(krank)
         issue_registry.async_delete_issue(self.hass, DOMAIN, "token_problem")
 
 

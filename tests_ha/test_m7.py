@@ -203,9 +203,11 @@ async def test_voller_durchgang_ohne_yaml(
         [
             herzschlag(),  # Herzschlag beim Richten
             projekt_antwort(),  # Hinzufuegen: Identitaet klaeren
+            projekt_antwort(),  # M8-2: Stammdaten zum frischen Lauf ueber die ID
             releases(releases_objekt("v1.2.0")),  # frischer Fund zum frischen Eintrag
             projekt_antwort(),  # Liste frisch zeigen
             zip_aufzeichnung("v1.2.0"),  # Installieren
+            projekt_antwort(),  # M8-2: Stammdaten im Takt-Lauf ueber die ID
             releases(releases_objekt("v1.3.0", "Frisch")),  # neuer Release im Takt
             zip_aufzeichnung("v1.3.0"),  # Aktualisieren
         ]
@@ -283,8 +285,9 @@ async def test_voller_durchgang_ohne_yaml(
 
     gespeichert = hass_storage["hacs_lab." + HOST.replace(".", "_")]["data"]
     assert gespeichert["eintraege"] == []
-    # Alle Aufzeichnungen verbraucht: kein Ruf ging ueber die Reihe hinaus.
-    assert len(attrappe.abrufe) == 7
+    # Alle Aufzeichnungen verbraucht: kein Ruf ging ueber die Reihe hinaus
+    # (seit M8-2 fragt jeder Lauf zusaetzlich die Stammdaten ueber die ID).
+    assert len(attrappe.abrufe) == 9
 
 
 # ----------------------------------------------------------------------
@@ -456,6 +459,7 @@ async def test_hinzufuegen_lehnt_fehler_ab(
             nicht_gefunden(),  # erster Versuch: gibt es nicht
             projekt_antwort(),  # zweiter Versuch: Kategorie untauglich
             projekt_antwort(),  # dritter Versuch: klappt ...
+            projekt_antwort(),  # M8-2: Stammdaten zum frischen Lauf ueber die ID
             releases(
                 releases_objekt("v1.0.0")
             ),  # ... und der Beobachter schaut gleich nach

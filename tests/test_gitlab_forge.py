@@ -119,3 +119,41 @@ async def test_stammdaten_nennen_die_web_ansichten():
     assert info.web_url == ""
     assert info.tickets_url == ""
     assert info.releases_url == ""
+
+
+# -- Stufe M8: Stammdaten ueber die ID --------------------------------
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_oeffnen_dasselbe_tor():
+    """Die ID ist der stabile Weg: dasselbe Antwortformat wie ueber den Pfad."""
+    info = await forge(json_antworten={"/projects/789012": projekt()}).repository_nach_id(
+        "789012"
+    )
+    assert info.provider_id == "789012"
+    assert info.full_name == "foo/bar"
+    assert info.topics == ("hacs",)
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_nennen_den_neuen_namen():
+    """Ein umbenanntes Projekt antwortet unter der alten ID mit dem neuen Pfad."""
+    http = FakeHttp({"/projects/789012": projekt(full_name="neu/baz")})
+    f = GitLabForge(http, HOST)
+    info = await f.repository_nach_id("789012")
+    assert info.full_name == "neu/baz"
+    assert info.provider_id == "789012"
+    assert "789012" in http.aufrufe[0][0]
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_geloescht_ist_nicht_gefunden():
+    with pytest.raises(NichtGefunden):
+        await forge().repository_nach_id("111")
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_keine_ziffern_kein_weg():
+    """Die ID kommt aus der Ablage -- trotzdem wird sie geprueft, bevor sie reist."""
+    from hacs_lab.core.forge import ForgeFehler
+
+    with pytest.raises(ForgeFehler):
+        await forge(json_antworten={"/projects/": projekt()}).repository_nach_id("../7a")
