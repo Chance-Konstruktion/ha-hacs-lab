@@ -28,10 +28,12 @@ if importlib.util.find_spec("hacs_lab") is None:
     # liegt zwei Ebenen hoeher, direkt neben custom_components.
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from homeassistant.components import websocket_api as ha_websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
@@ -52,8 +54,26 @@ from .const import (
     ablage_schluessel,
 )
 from .eintraege import Eintraege
+from .frontend import richten as oberflaeche_richten
+from .websocket_api import BEFEHLE
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Einmal je Laden der Komponente: die Oberflaeche (Stufe M7).
+
+    WebSocket-Befehle und Panel werden hier angemeldet, nicht je
+    Eintrag -- sie gehoeren der Integration, nicht der Instanz. Das
+    Panel bleibt in der Sidebar stehen, auch wenn die letzte Instanz
+    entfernt wird; die Liste zeigt dann ehrlich Leere. Der Alias beim
+    Import ist Absicht: unser Modul heisst genauso wie das von Home
+    Assistant (uebliche Namensgebung fuer Befehl-Dateien).
+    """
+    await oberflaeche_richten(hass)
+    for befehl in BEFEHLE:
+        ha_websocket_api.async_register_command(hass, befehl)
+    return True
 
 
 class HacsLabKoordinator(DataUpdateCoordinator[dict[str, int | str]]):

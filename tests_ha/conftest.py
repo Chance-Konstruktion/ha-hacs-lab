@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.setup import async_setup_component
 
 from tests.attrappe import Aufzeichnung, SitzungsAttrappe
 
@@ -24,6 +25,20 @@ from tests.attrappe import Aufzeichnung, SitzungsAttrappe
 @pytest.fixture(autouse=True)
 def _eigene_integration_freischalten(enable_custom_integrations: None) -> None:
     """Jeder Test dieser Bahn laedt die eigene Integration aus dem Repo."""
+    yield
+
+
+@pytest.fixture(autouse=True)
+async def _wie_im_richtigen_haus(hass: HomeAssistant) -> None:
+    """http und websocket_api stehen bereit, bevor Integrationen laufen.
+
+    Das Hochfahren von Home Assistant richtet beides immer vor den
+    Konfigurationseintraegen (Bootstrap-Reihenfolge). Die Testumgebung
+    tut das erst auf Anfrage -- seit Stufe M7 meldet die Oberflaeche
+    einen statischen Weg an, sobald die Komponente laeuft, darum wird
+    die Produktions-Reihenfolge hier fuer jeden Test hergestellt.
+    """
+    assert await async_setup_component(hass, "websocket_api", {})
     yield
 
 

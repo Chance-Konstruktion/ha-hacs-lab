@@ -22,6 +22,7 @@ def _kodiere(pfad: str) -> str:
 
 
 def _zu_info(roh: dict) -> RepositoryInfo:
+    web = roh.get("web_url") or ""
     return RepositoryInfo(
         provider_id=str(roh["id"]),
         full_name=roh["path_with_namespace"],
@@ -31,7 +32,11 @@ def _zu_info(roh: dict) -> RepositoryInfo:
         sterne=int(roh.get("star_count") or 0),
         offene_tickets=int(roh.get("open_issues_count") or 0),
         archiviert=bool(roh.get("archived")),
-        web_url=roh.get("web_url") or "",
+        web_url=web,
+        # Die Web-Ansichten von Tickets und Releases: GitLab haengt sie
+        # an die Projekt-Adresse. Anbieterwissen bleibt hier, nirgendwo sonst.
+        tickets_url=(web + "/-/issues") if web else "",
+        releases_url=(web + "/-/releases") if web else "",
     )
 
 
