@@ -347,3 +347,39 @@ async def test_echte_stammdaten_kommen_vollstaendig_an():
     assert info.web_url == "https://codeberg.org/jelmer/HA-Thames-Water"
     # Das Suffix der Anzeige taucht nie in der Anfrage auf
     assert "*forge" not in str(info)
+
+
+# -- Stufe M8: Stammdaten ueber die ID --------------------------------
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_ueber_das_eigene_tor():
+    """Forgejo adressiert die ID ueber /repositories/{id} -- unabhaengig vom Pfad."""
+    http = FakeHttp({"/repositories/42": forgejo_repo()})
+    f = ForgejoForge(http, HOST)
+    info = await f.repository_nach_id("42")
+    assert info.provider_id == "42"
+    assert info.full_name == "foo/bar"
+    assert info.topics == ("hacs",)
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_nennen_den_neuen_namen():
+    """Umbenannt: die alte ID meldet den neuen Namen -- fuer den Nachzug."""
+    http = FakeHttp({"/repositories/42": forgejo_repo(full_name="neu/baz")})
+    f = ForgejoForge(http, HOST)
+    info = await f.repository_nach_id("42")
+    assert info.full_name == "neu/baz"
+    assert "repositories/42" in http.aufrufe[0][0]
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_geloescht_ist_nicht_gefunden():
+    with pytest.raises(NichtGefunden):
+        await forge().repository_nach_id("111")
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nach_id_keine_ziffern_kein_weg():
+    from hacs_lab.core.forge import ForgeFehler
+
+    with pytest.raises(ForgeFehler):
+        await forge().repository_nach_id("7a/../")

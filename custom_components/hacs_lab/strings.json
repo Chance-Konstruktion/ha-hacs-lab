@@ -88,6 +88,14 @@
     "repo_krank": {
       "title": "Repository reports errors: {name}",
       "description": "The update check keeps failing for this repository. Reason: {grund}. Other repositories are unaffected."
+    },
+    "kategorie_gendert": {
+      "title": "Category no longer matches: {name}",
+      "description": "The owner labeled this repository as \"{neue}\" (hacs-{neue} topic), but it is registered here as \"{alte}\". Check which one is intended; this message clears once the topic and the registered category agree again."
+    },
+    "ablage_unlesbar": {
+      "title": "Unreadable entries in the storage of {host}",
+      "description": "{anzahl} stored entries could not be read and were skipped. Nothing was deleted. The next time the list is saved, only readable entries are written; this message disappears after a restart once the storage is clean."
     }
   }
 }

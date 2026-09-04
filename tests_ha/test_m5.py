@@ -24,7 +24,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.hacs_lab.const import CONF_HOST, CONF_TOKEN, DOMAIN
 from hacs_lab.core.identity import RepositoryIdentity
-from tests.attrappe import Aufzeichnung
+from tests.attrappe import Aufzeichnung, projekt
 
 SCHLUESSEL = "hacs_lab.gitlab_example_net"
 STORAGE_KEY = "gitlab@gitlab.example.net:789012"
@@ -53,6 +53,20 @@ def release_objekt(tag: str, beschreibung: str = "") -> dict:
         "released_at": "2026-09-01T10:00:00Z",
         "assets": {},
     }
+
+
+def stammdaten(
+    full_name: str = "foo/bar", pid: int | str = 789012, topics=("hacs",), **rest
+) -> Aufzeichnung:
+    """Die Antwort auf die Stammdatenfrage ueber die ID (Stufe M8).
+
+    Der Lauf fragt je Eintrag zuerst hier -- die ID traegt -- und erst
+    dann die Releases unter dem Namen, den diese Antwort nennt.
+    """
+    return Aufzeichnung(
+        text=json.dumps(projekt(pid=pid, full_name=full_name, topics=topics, **rest)),
+        kopfzeilen={},
+    )
 
 
 def herzschlag() -> Aufzeichnung:
@@ -105,7 +119,9 @@ async def test_update_entity_zeigt_beide_versionen(
         [eintrag_daten()],
         stand={STORAGE_KEY: {"installiert": "1.1.0", "vorabversionen": False}},
     )
-    sitzung_einpflanzen([herzschlag(), releases(release_objekt("v1.2.0", "Die Notizen"))])
+    sitzung_einpflanzen(
+        [herzschlag(), stammdaten(), releases(release_objekt("v1.2.0", "Die Notizen"))]
+    )
     await richten(hass, mock_eintrag())
 
     zustand_update = zustand(hass, "update")
@@ -135,10 +151,14 @@ async def test_neues_release_erscheint_ohne_zutun(
     )
     # Beim Vorlauf um den Takt feuert der Aktualisierer (empirisch so mit
     # dieser Home-Assistant-Version; der Herzschlag bleibt im Debounce).
+    # Jede Runde fragt zuerst die Stammdaten ueber die ID (M8) -- drei
+    # Abrufe in der ersten, fuenf in der zweiten Runde.
     attrappe = sitzung_einpflanzen(
         [
             herzschlag(),
+            stammdaten(),
             releases(release_objekt("v1.2.0")),
+            stammdaten(),
             releases(release_objekt("v1.3.0", "Frisch")),
         ]
     )
@@ -153,7 +173,7 @@ async def test_neues_release_erscheint_ohne_zutun(
     assert frisch.attributes["latest_version"] == "1.3.0"
     assert frisch.attributes["release_summary"] == "Frisch"
     assert frisch.state == "on"
-    assert len(attrappe.abrufe) == 3
+    assert len(attrappe.abrufe) == 5
 
 
 async def test_vorab_schalter_dreht_die_auswahl(
@@ -167,7 +187,9 @@ async def test_vorab_schalter_dreht_die_auswahl(
     sitzung_einpflanzen(
         [
             herzschlag(),
+            stammdaten(),
             releases(release_objekt("v1.3.0-rc1", "Vorsicht")),
+            stammdaten(),
             releases(release_objekt("v1.3.0-rc1", "Vorsicht")),
         ]
     )
@@ -219,6 +241,7 @@ async def test_installations_dienst_tauscht_die_dateien(
     sitzung_einpflanzen(
         [
             herzschlag(),
+            stammdaten(),
             releases(release_objekt("v1.2.0")),
             Aufzeichnung(rohbytes=archiv.getvalue(), kopfzeilen={}),
         ]
@@ -263,6 +286,11 @@ async def test_kaputtes_repo_wirft_die_andere_entity_nicht_um(
     sitzung_einpflanzen(
         [
             herzschlag(),
+            # Stammdaten je Eintrag: foo/bar lebt, kaputt/bar gibt es unter
+            # der ID nicht mehr -- der Lauf faellt auf den gespeicherten
+            # Pfad zurueck und findet auch dort nichts.
+            stammdaten(),
+            nicht_gefunden(),
             releases(release_objekt("v1.2.0")),
             nicht_gefunden(),
             nicht_gefunden(),
@@ -288,7 +316,7 @@ async def test_neuer_eintrag_erscheint_ohne_neustart(
 ) -> None:
     speichern(hass_storage, [])
     sitzung_einpflanzen(
-        [herzschlag(), releases(release_objekt("v1.2.0", "Frisch dabei"))]
+        [herzschlag(), stammdaten(), releases(release_objekt("v1.2.0", "Frisch dabei"))]
     )
     await richten(hass, mock_eintrag())
     assert hass.states.async_entity_ids("update") == []
@@ -334,7 +362,7 @@ async def test_entladen_nimmt_die_waben_mit(
         [eintrag_daten()],
         stand={STORAGE_KEY: {"installiert": "1.1.0", "vorabversionen": False}},
     )
-    sitzung_einpflanzen([herzschlag(), releases(release_objekt("v1.2.0"))])
+    sitzung_einpflanzen([herzschlag(), stammdaten(), releases(release_objekt("v1.2.0"))])
     mock = mock_eintrag()
     await richten(hass, mock)
     update_id = sorted(hass.states.async_entity_ids("update"))[0]

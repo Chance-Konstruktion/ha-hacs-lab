@@ -63,6 +63,11 @@ M0 (Fundament), M1 (HTTP-Zugang), M2 (Home-Assistant-Geruest) und M4a
 (sicheres Entpacken) stehen und sind getestet. Als Anbieter tragen
 neben GitLab (M1) auch Forgejo (M9, Referenzinstanz Codeberg) -- dessen
 Abnahme laeuft gegen echte, bytegenaue Aufzeichnungen von codeberg.org.
+Der Bestand ist robust (M8): Diagnose ohne Token im Klartext,
+Reparatur-Meldungen (Token, verschwundenes Repository, Kategorie passt
+nicht mehr, unlesbare Ablage-Eintraege), Ausfall ohne Datenverlust --
+und ein umbenanntes Projekt wird ueber seine ID erkannt und der Name
+still nachgezogen, ohne dass die Entities sich bewegen.
 Einrichten in Home Assistant: Integration
 hinzufuegen, Host der GitLab-Instanz angeben (ein eingefuegter Link
 wird auf den Host gekuerzt), optional einen Lesetoken -- der Dialog

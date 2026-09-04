@@ -45,6 +45,18 @@ def _kodiere(pfad: str) -> str:
     return quote(strip_suffix(pfad).strip("/"), safe="/")
 
 
+def _id_kodiere(anbieter_id: str) -> str:
+    """Eine Anbieter-ID als URL-Stueck -- nur Ziffern duerfen es sein.
+
+    Die ID kommt aus der Ablage, nicht vom Menschen; alles andere wird
+    hier abgewiesen, bevor es durch die URL reist.
+    """
+    gereinigt = str(anbieter_id or "").strip()
+    if not gereinigt.isdigit():
+        raise ForgeFehler("keine Forgejo-Projekt-ID: " + repr(gereinigt))
+    return gereinigt
+
+
 def _zu_info(roh: dict) -> RepositoryInfo:
     """Uebersetzt einen Forgejo-Projektdatensatz in die Kernform.
 
@@ -80,6 +92,20 @@ class ForgejoForge:
         roh = await self._json(self.api + "/repos/" + _kodiere(pfad))
         if not isinstance(roh, dict) or "id" not in roh:
             raise NichtGefunden("kein Projekt unter " + pfad + " auf " + self.host)
+        return _zu_info(roh)
+
+    async def repository_nach_id(self, anbieter_id: str) -> RepositoryInfo:
+        """Stammdaten ueber die numerische Repository-ID (Stufe M8).
+
+        Forgejo hat dafuer ein eigenes Tor: ``/repositories/{id}`` --
+        unabhaengig vom Pfad. Ein umbenanntes Projekt meldet hier
+        seinen neuen ``full_name``.
+        """
+        roh = await self._json(self.api + "/repositories/" + _id_kodiere(anbieter_id))
+        if not isinstance(roh, dict) or "id" not in roh:
+            raise NichtGefunden(
+                "kein Projekt unter der ID " + str(anbieter_id) + " auf " + self.host
+            )
         return _zu_info(roh)
 
     async def identitaet(self, pfad: str) -> RepositoryIdentity:

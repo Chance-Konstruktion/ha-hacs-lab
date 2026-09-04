@@ -75,7 +75,21 @@ class Forge(Protocol):
     host: str
 
     async def repository(self, pfad: str) -> RepositoryInfo:
-        """Stammdaten zu ``gruppe/projekt``."""
+        """Stammdaten zu ``gruppe/projekt``.
+
+        Der Pfad ist die Adresse des Menschen -- und genau deshalb
+        vergaenglich: Projekte werden umbenannt, Pfade wiederverwendet.
+        Wer wissen will, wo ein Projekt HEUTE wohnt, fragt die ID.
+        """
+
+    async def repository_nach_id(self, anbieter_id: str) -> RepositoryInfo:
+        """Stammdaten ueber die Anbieter-ID -- der Name darf sich aendern, sie nicht.
+
+        Stufe M8: umbenannte Projekte. Die ID ist das eine, das bei einer
+        Umbenennung traegt; ueber sie kommt der aktuelle Name zurueck und
+        wird nachgezogen. Die Antwort ist Stammdaten wie bei
+        :meth:`repository` -- nur der Weg dorthin ist der stabile.
+        """
 
     async def releases(self, pfad: str) -> list[Release]:
         """Veroeffentlichte Versionen, neueste zuerst."""

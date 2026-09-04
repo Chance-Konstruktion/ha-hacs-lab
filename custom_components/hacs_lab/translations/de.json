@@ -88,6 +88,14 @@
     "repo_krank": {
       "title": "Repository meldet Fehler: {name}",
       "description": "Die Update-Prüfung schlägt für dieses Repository wiederholt fehl. Grund: {grund}. Andere Repositorys sind nicht betroffen."
+    },
+    "kategorie_gendert": {
+      "title": "Kategorie passt nicht mehr: {name}",
+      "description": "Der Besitzer nennt dieses Repository jetzt \"{neue}\" (Topic hacs-{neue}), hier steht es noch als \"{alte}\". Pruefe, was stimmt; die Meldung verschwindet, sobald Topic und Kategorie wieder uebereinstimmen."
+    },
+    "ablage_unlesbar": {
+      "title": "Unlesbare Eintraege in der Ablage von {host}",
+      "description": "{anzahl} gespeicherte Eintraege liessen sich nicht lesen und wurden uebersprungen. Geloescht wurde nichts. Beim naechsten Sichern der Liste schreibt sie nur noch Lesbares; nach einem Neustart verschwindet die Meldung, sobald die Ablage sauber ist."
     }
   }
 }

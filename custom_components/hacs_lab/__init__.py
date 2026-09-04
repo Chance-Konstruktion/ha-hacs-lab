@@ -31,7 +31,9 @@ if importlib.util.find_spec("hacs_lab") is None:
 from homeassistant.components import websocket_api as ha_websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.issue_registry import IssueSeverity
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import (
@@ -44,6 +46,7 @@ from hacs_lab.core.gitlab_forge import GitLabForge
 from hacs_lab.http_aiohttp import AiohttpClient
 
 from .ablage import Ablage
+from .aktualisierer import _kennung
 from .const import (
     ABLAGE_VERSION,
     CONF_ABSTAND_MINUTEN,
@@ -131,6 +134,31 @@ class Laufzeit:
     eintraege: Eintraege
 
 
+def _meldung_unlesbare_ablage(hass: HomeAssistant, host: str, anzahl: int) -> None:
+    """Stufe M8: uebersprungene Eintraege gehoeren aufs Reparatur-Brett.
+
+    Frueher war das nur eine Warnung im Protokoll -- unsichtbar fuer jeden,
+    der nicht gerade hinschaut. Jetzt steht es als Meldung da, solange
+    die Ablage Unlesbares enthaelt, und verschwindet, sobald das Richten
+    wieder sauber liest. Entfernt wird nichts: Uebersprungenes bleibt in
+    der Datei liegen, bis die Liste das naechste Mal sichert (dann
+    schreibt sie nur noch Lesbares).
+    """
+    meldung = "ablage_unlesbar_" + _kennung(host)
+    if anzahl > 0:
+        issue_registry.async_create_issue(
+            hass,
+            DOMAIN,
+            meldung,
+            is_fixable=False,
+            severity=IssueSeverity.WARNING,
+            translation_key="ablage_unlesbar",
+            translation_placeholders={"host": host, "anzahl": str(anzahl)},
+        )
+    else:
+        issue_registry.async_delete_issue(hass, DOMAIN, meldung)
+
+
 async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
     """Eintrag richten: Sitzung, Klient, Forge, Ablage, Herzschlag.
 
@@ -150,6 +178,7 @@ async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
     # die Liste der Eintraege blieb unlesbar -- seit Stufe M3 gehoert
     # sie in die Laufzeit (Nachschau zu #13).
     eintraege = await Eintraege.aus_ablage(ablage)
+    _meldung_unlesbare_ablage(hass, forge.host, eintraege.unlesbar)
 
     koordinator = HacsLabKoordinator(hass, eintrag, forge)
     await koordinator.async_config_entry_first_refresh()

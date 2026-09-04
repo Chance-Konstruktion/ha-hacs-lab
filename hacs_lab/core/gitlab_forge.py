@@ -21,6 +21,19 @@ def _kodiere(pfad: str) -> str:
     return quote(strip_suffix(pfad).strip("/"), safe="")
 
 
+def _id_kodiere(anbieter_id: str) -> str:
+    """Eine Anbieter-ID als URL-Stueck -- nur Ziffern duerfen es sein.
+
+    Die ID kommt aus der Ablage, nicht vom Menschen. Alles, was nicht
+    wie eine GitLab-Projekt-ID aussieht, wird hier abgewiesen, bevor
+    es auf dem Weg durch die URL irgendwo Schaden anrichtet.
+    """
+    gereinigt = str(anbieter_id or "").strip()
+    if not gereinigt.isdigit():
+        raise ForgeFehler("keine GitLab-Projekt-ID: " + repr(gereinigt))
+    return gereinigt
+
+
 def _zu_info(roh: dict) -> RepositoryInfo:
     web = roh.get("web_url") or ""
     return RepositoryInfo(
@@ -55,6 +68,21 @@ class GitLabForge:
         roh = await self._json(self.api + "/projects/" + _kodiere(pfad))
         if not isinstance(roh, dict) or "id" not in roh:
             raise NichtGefunden("kein Projekt unter " + pfad + " auf " + self.host)
+        return _zu_info(roh)
+
+    async def repository_nach_id(self, anbieter_id: str) -> RepositoryInfo:
+        """Stammdaten ueber die numerische Projekt-ID (Stufe M8).
+
+        Die Projects-API nimmt IDs genauso an wie Pfade -- dasselbe
+        Tor, stabiler Weg. Ein umbenanntes Projekt antwortet hier mit
+        seinem neuen ``path_with_namespace``; ein geloeschtes gar
+        nicht mehr.
+        """
+        roh = await self._json(self.api + "/projects/" + _id_kodiere(anbieter_id))
+        if not isinstance(roh, dict) or "id" not in roh:
+            raise NichtGefunden(
+                "kein Projekt unter der ID " + str(anbieter_id) + " auf " + self.host
+            )
         return _zu_info(roh)
 
     async def identitaet(self, pfad: str) -> RepositoryIdentity:

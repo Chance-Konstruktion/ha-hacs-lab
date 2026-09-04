@@ -67,6 +67,14 @@ async def async_setup_entry(
             # weil der Beobachter selbst synchron ist.
             hass.async_create_task(aktualisierer.async_request_refresh())
             return
+        if art == "nachgezogen":
+            # Stufe M8: dasselbe Repository unter neuem Namen -- die Entity
+            # bleibt (der Schluessel traegt), sie liest Name und Kategorie
+            # je Schreibvorgang frisch aus der Liste.
+            entity = entities.get(eintrag_obj.storage_key)
+            if entity is not None and entity.hass is not None:
+                entity.async_write_ha_state()
+            return
         entity = entities.pop(eintrag_obj.storage_key, None)
         if entity is not None and entity.hass is not None:
             hass.async_create_task(entity.async_remove())
@@ -87,13 +95,30 @@ class HacsLabUpdateEntity(UpdateEntity):
     ) -> None:
         self._forge = laufzeit.forge
         self._staende: Staende = laufzeit.staende
+        self._eintraege = laufzeit.eintraege
         self._eintrag = eintrag
         self._aktualisierer = aktualisierer
         self._attr_unique_id = eintrag.storage_key
-        self._attr_name = eintrag.anzeigename
-        self._attr_title = eintrag.anzeigename
         self._attr_supported_features = UpdateEntityFeature.INSTALL
         self._laeuft_gerade = False
+
+    @property
+    def _eintrag_aktuell(self) -> Eintrag:
+        """Der Eintrag, wie er JETZT in der Liste steht (Stufe M8).
+
+        Ein nachgezogener Name darf nicht auf einen Neustart warten:
+        Entities lesen hier frisch, der Schluessel (und damit die
+        Entity selbst) bleibt bei einer Umbenennung unberuehrt.
+        """
+        return self._eintraege.finde(self._eintrag.storage_key) or self._eintrag
+
+    @property
+    def name(self) -> str:
+        return self._eintrag_aktuell.anzeigename
+
+    @property
+    def title(self) -> str:
+        return self._eintrag_aktuell.anzeigename
 
     @property
     def in_progress(self) -> bool:
@@ -153,7 +178,7 @@ class HacsLabUpdateEntity(UpdateEntity):
             "quelle": fund.quelle,
             "tag": fund.tag,
             "veroeffentlicht_am": fund.veroeffentlicht_am,
-            "kategorie": self._eintrag.kategorie,
+            "kategorie": self._eintrag_aktuell.kategorie,
             "vorabversionen": self._staende.stand(
                 self._eintrag.storage_key
             ).vorabversionen,
@@ -183,7 +208,9 @@ class HacsLabUpdateEntity(UpdateEntity):
         self._laeuft_gerade = True
         self._schreibe()
         try:
-            await installiere_version(self.hass, self._forge, self._eintrag, fund.tag)
+            await installiere_version(
+                self.hass, self._forge, self._eintrag_aktuell, fund.tag
+            )
         except InstallationsFehler as fehlschlag:
             raise HomeAssistantError(str(fehlschlag)) from fehlschlag
         finally:
@@ -192,6 +219,6 @@ class HacsLabUpdateEntity(UpdateEntity):
         self._schreibe()
         _LOGGER.info(
             "%s auf %s installiert",
-            self._eintrag.anzeigename,
+            self._eintrag_aktuell.anzeigename,
             fund.neueste,
         )

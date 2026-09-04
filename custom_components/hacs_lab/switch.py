@@ -21,7 +21,8 @@ from .const import DOMAIN
 
 if TYPE_CHECKING:
     from . import Laufzeit
-    from .eintraege import Eintrag
+    from .aktualisierer import HacsLabAktualisierer
+    from .eintraege import Eintraege, Eintrag
     from .stand import Staende
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,7 +46,9 @@ async def async_setup_entry(
     entities: dict[str, HacsLabVorabSchalter] = {}
 
     def _anlegen(eintrag_obj: Eintrag) -> None:
-        entity = HacsLabVorabSchalter(laufzeit.staende, aktualisierer, eintrag_obj)
+        entity = HacsLabVorabSchalter(
+            laufzeit.staende, laufzeit.eintraege, aktualisierer, eintrag_obj
+        )
         entities[eintrag_obj.storage_key] = entity
         async_add_entities([entity])
 
@@ -55,6 +58,13 @@ async def async_setup_entry(
     def _bei_aenderung(art: str, eintrag_obj: Eintrag) -> None:
         if art == "hinzugefuegt":
             _anlegen(eintrag_obj)
+            return
+        if art == "nachgezogen":
+            # Stufe M8: derselbe Schluessel unter neuem Namen -- nur neu
+            # zeichnen, die Entity bleibt.
+            entity = entities.get(eintrag_obj.storage_key)
+            if entity is not None and entity.hass is not None:
+                entity.async_write_ha_state()
             return
         entity = entities.pop(eintrag_obj.storage_key, None)
         if entity is not None and entity.hass is not None:
@@ -72,14 +82,28 @@ class HacsLabVorabSchalter(SwitchEntity):
     def __init__(
         self,
         staende: Staende,
+        eintraege: Eintraege,
         aktualisierer: HacsLabAktualisierer,
         eintrag: Eintrag,
     ) -> None:
         self._staende = staende
+        self._eintraege = eintraege
         self._aktualisierer = aktualisierer
         self._eintrag = eintrag
         self._attr_unique_id = eintrag.storage_key + "_vorabversionen"
-        self._attr_name = eintrag.anzeigename + " — Vorabversionen"
+
+    @property
+    def _eintrag_aktuell(self) -> Eintrag:
+        """Der Eintrag, wie er JETZT in der Liste steht (Stufe M8).
+
+        Ein nachgezogener Name erscheint so ohne Neustart auch hier;
+        der Schluessel (und damit die Entity) bleibt, wo er ist.
+        """
+        return self._eintraege.finde(self._eintrag.storage_key) or self._eintrag
+
+    @property
+    def name(self) -> str:
+        return self._eintrag_aktuell.anzeigename + " — Vorabversionen"
 
     @property
     def is_on(self) -> bool:
@@ -87,7 +111,7 @@ class HacsLabVorabSchalter(SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
-        return {"kategorie": self._eintrag.kategorie}
+        return {"kategorie": self._eintrag_aktuell.kategorie}
 
     async def _drehen(self, an: bool) -> None:
         await self._staende.setzen(self._eintrag.storage_key, vorabversionen=an)
@@ -96,7 +120,7 @@ class HacsLabVorabSchalter(SwitchEntity):
         await self._aktualisierer.async_request_refresh()
         _LOGGER.info(
             "Vorabversionen fuer %s: %s",
-            self._eintrag.anzeigename,
+            self._eintrag_aktuell.anzeigename,
             "mitgenommen" if an else "weggelassen",
         )
 

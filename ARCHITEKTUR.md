@@ -35,6 +35,11 @@ Daraus abgeleitet:
 Drei Folgen, die genau so gewollt sind:
 
 * Ein umbenanntes Projekt bleibt derselbe Eintrag -- die ID traegt.
+  Seit M8 wird der Name auch wirklich nachgezogen: der Lauf fragt die
+  Stammdaten ueber die ID (billig ueber den ETag-Zwischenspeicher),
+  prueft unter dem aktuellen Namen und ersetzt den gespeicherten still.
+  Entities und Staende bleiben, wo sie sind -- ihr Schluessel ist die
+  Identitaet, nicht der Name.
 * Dieselbe Projekt-ID auf zwei GitLab-Instanzen sind zwei Eintraege --
   darum steckt der Host in `storage_key` und nicht in `uid`.
 * Ein GitHub-Repo namens `foo/bar-lab` wird nie mit einem
@@ -47,8 +52,11 @@ eine Abfrage geraet: `foo/bar*lab` existiert im GitLab nicht.
 ## 3. Eine Schnittstelle je Anbieter, kein Sonderpfad
 
 `core/forge.py` beschreibt, was HACS*lab braucht: Stammdaten,
-Releases, eine Datei, eine Archiv-Adresse, eine Topic-Suche. Mehr
-nicht. `gitlab_forge.py` ist die erste Umsetzung, `forgejo_forge.py`
+Releases, eine Datei, eine Archiv-Adresse, eine Topic-Suche -- und seit
+M8 die Stammdatenfrage über die ID, denn der Name eines Projekts ist
+die Adresse des Menschen und damit vergänglich: Projekte werden
+umbenannt, Pfade wiederverwendet. Mehr nicht. `gitlab_forge.py` ist die
+erste Umsetzung, `forgejo_forge.py`
 (M9, Codeberg als Referenzinstanz) die zweite -- ohne dass der Ablauf,
 der Speicher oder die Oberfläche dazwischen etwas vom Anbieter wissen.
 

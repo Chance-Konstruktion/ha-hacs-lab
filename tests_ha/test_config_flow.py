@@ -418,14 +418,17 @@ async def test_nicht_gefunden_wird_benannt(
 async def test_doppeltes_repository_wird_abgewiesen(
     hass: HomeAssistant, sitzung_einpflanzen, hass_storage
 ) -> None:
-    # Die fuenfte Aufzeichnung gehoert dem M5-Lauf: das Anlegen des
-    # Eintrags stoesst sofort eine Update-Runde an (update.py-Beobachter).
+    # Die fuenfte und sechste Aufzeichnung gehoeren dem M8-Lauf nach dem
+    # Anlegen: erst die Stammdaten ueber die ID, dann die Releases (das
+    # Anlegen des Eintrags stoesst sofort eine Update-Runde an,
+    # update.py-Beobachter).
     mock, _ = await dialog_und_eintrag(
         hass,
         sitzung_einpflanzen,
         [
             antwort(),
             antwort(),
+            projekt_als_antwort(),
             projekt_als_antwort(),
             Aufzeichnung(
                 text=json.dumps(
