@@ -3,10 +3,11 @@
 import json
 
 import pytest
-
 from hacs_lab.core.forge import NichtGefunden
 from hacs_lab.core.gitlab_forge import GitLabForge
-from tests.attrappe import FakeHttp, projekt
+
+from tests.attrappe import projekt
+from tests.attrappe_kern import FakeHttp
 
 HOST = "gitlab.example.net"
 

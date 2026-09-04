@@ -1,6 +1,6 @@
 """HTTP-Zugang auf der aiohttp-Sitzung.
 
-Umsetzung von :class:`~hacs_lab.core.forge.HttpClient`. Die Sitzung wird
+Umsetzung von :class:`~forge.HttpClient`. Die Sitzung wird
 hineingereicht und nicht importiert -- dieselbe Verkehrung, die auch den
 Kern frei von Home Assistant haelt (ARCHITEKTUR.md, Entscheidung 3).
 In Home Assistant kommt die Sitzung spaeter von
@@ -40,7 +40,7 @@ import json
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Protocol
 
-from .core.forge import ForgeFehler, NichtGefunden
+from .forge import ForgeFehler, NichtGefunden
 
 #: Wartezeit in Sekunden, wenn der Anbieter bei 429 keine vorgibt.
 STANDARD_WARTEZEIT = 1.0

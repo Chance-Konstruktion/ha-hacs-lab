@@ -74,18 +74,48 @@ tests-homeassistant:
 # --------------------------------------------------------------------
 # Der Kern haengt nicht an Home Assistant. Das ist keine Stilfrage:
 # nur so bleiben die Tests schnell und ohne HA-Installation lauffaehig.
+# Seit der Form-Entscheidung zu #11 liegt der Kern in der Integration
+# (custom_components/hacs_lab/core); die Anmeldung zum Import macht
+# tests/kern_laden.py -- bewusst registriert, nicht auf den Suchpfad.
 kern-ohne-homeassistant:
   <<: *ueberall
   stage: grenzen
   before_script: []
   script:
-    - python -c "import hacs_lab.core.entdeckung, hacs_lab.core.gitlab_forge, hacs_lab.core.versionen; print('Kern importiert ohne Home Assistant')"
+    - python -c "import tests.kern_laden; import hacs_lab.core.entdeckung, hacs_lab.core.gitlab_forge, hacs_lab.core.versionen; print('Kern importiert ohne Home Assistant')"
     - |
-      if grep -rn "import homeassistant\|from homeassistant" hacs_lab/; then
-        echo "FEHLER: Home Assistant im Kern -- das gehoert nach custom_components/"
+      if grep -rn "import homeassistant\|from homeassistant" custom_components/hacs_lab/core/; then
+        echo "FEHLER: Home Assistant im Kern -- das gehoert in die HA-Schicht"
         exit 1
       fi
       echo "kein Home-Assistant-Import im Kern"
+
+# Form-Waechter zu #11: die Auslieferungsform darf nicht wieder
+# auseinanderfallen. Drei Zusagen stehen in ARCHITEKTUR.md (Entscheidung
+# 5) -- hier werden sie gegen den Stand geprueft, bei jedem Lauf:
+#   1. der Kern liegt in der Integration
+#   2. keine zweite Kopie an der Wurzel
+#   3. niemand greift nach dem Suchpfad
+# So bleibt die Handinstallation aus der README auch nach Wochen noch
+# wahr, und der Release-Bauer findet nur noch die neue Form vor.
+auslieferungsform:
+  <<: *ueberall
+  stage: grenzen
+  before_script: []
+  script:
+    - |
+      set -e
+      test -f custom_components/hacs_lab/core/__init__.py || {
+        echo "FEHLER: Kern fehlt in der Integration (custom_components/hacs_lab/core)"; exit 1; }
+      test -f custom_components/hacs_lab/core/forge.py || {
+        echo "FEHLER: forge.py fehlt im Kern -- halber Umzug?"; exit 1; }
+      test ! -e hacs_lab || {
+        echo "FEHLER: hacs_lab/ an der Wurzel -- zweite Kopie, Form gekippt"; exit 1; }
+      if grep -rn "sys\.path" custom_components/; then
+        echo "FEHLER: Suchpfad-Griff in der Integration -- genau das war Befund a aus #11"
+        exit 1
+      fi
+      echo "Auslieferungsform stabil: Kern in der Integration, keine Kopie, kein Suchpfad-Griff"
 
 # Anbieterwissen gehoert hinter die Forge-Schnittstelle. Ein Sonderpfad
 # im Ablauf faellt hier auf, solange er noch billig zu entfernen ist.
@@ -98,9 +128,9 @@ kein-anbieter-sonderpfad:
       # Gesucht ist echter Code, keine Erwaehnung der Regel. Zeilen mit
       # ``...`` sind Dokumentation und zaehlen nicht.
       treffer=$(grep -rnE 'if .*provider *== *"(gitlab|github)"' \
-        --include="*.py" hacs_lab/ custom_components/ \
+        --include="*.py" custom_components/ \
         | grep -v '``' \
-        | grep -v "hacs_lab/core/gitlab_forge.py" || true)
+        | grep -v "custom_components/hacs_lab/core/gitlab_forge.py" || true)
       if [ -n "$treffer" ]; then
         echo "$treffer"
         echo "FEHLER: Anbieter-Sonderpfad ausserhalb der Anbieterklasse"

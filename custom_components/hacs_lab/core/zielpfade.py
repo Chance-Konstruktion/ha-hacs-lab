@@ -8,7 +8,7 @@ in das Ziel wandert -- die drei ``hacs.json``-Felder
 ``content_in_root``, ``filename`` und ``zip_release`` schalten das um.
 
 Bewusst ohne jede Dateioperation: das Berechnen ist pur, das Schreiben
-uebernimmt :mod:`hacs_lab.core.entpacken` mit den hier errechneten
+uebernimmt :mod:`entpacken` mit den hier errechneten
 Wegen. So bleibt beides einzeln pruefbar, und die HA-Schicht (M4b)
 setzt die Teile zusammen: Forge laden, Zielpfad errechnen, Ausschnitt
 waehlen, sicher entpacken, tauschen.
@@ -127,7 +127,7 @@ def waehle_eintraege(ausschnitt: Ausschnitt, namen: list[str]) -> dict[str, str]
     """Ordnet Archiv-Eintraegen ihren Pfad im Zielverzeichnis zu.
 
     ``namen`` sind die Eintraege des Archivs (nur Dateien, wie sie
-    :func:`hacs_lab.core.entpacken.plane` liefert). Zurueck kommt eine
+    :func:`entpacken.plane` liefert). Zurueck kommt eine
     Zuordnung Archiv-Name zu Ziel-Name; Verzeichnisse entstehen beim
     Entpacken nebenbei aus den Pfaden. Diese Zuordnung ist es, die
     ``entpacke`` als ``nur``-Filter und die HA-Schicht als Kopierplan

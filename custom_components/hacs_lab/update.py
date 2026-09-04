@@ -19,10 +19,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from hacs_lab.core.aktualisierungen import Fund
-
 from .aktualisierer import HacsLabAktualisierer, hole_aktualisierer
 from .const import DOMAIN
+from .core.aktualisierungen import Fund
 from .installation import InstallationsFehler, installiere_version
 
 if TYPE_CHECKING:

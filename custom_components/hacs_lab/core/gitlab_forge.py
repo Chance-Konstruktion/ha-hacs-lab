@@ -54,7 +54,7 @@ def _zu_info(roh: dict) -> RepositoryInfo:
 
 
 class GitLabForge:
-    """Umsetzung von :class:`~hacs_lab.core.forge.Forge` fuer GitLab."""
+    """Umsetzung von :class:`~forge.Forge` fuer GitLab."""
 
     provider = GITLAB
 

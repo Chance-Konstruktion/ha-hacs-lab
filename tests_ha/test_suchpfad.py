@@ -1,17 +1,18 @@
-"""Der Fallback erweitert den Suchpfad hinten -- nie vorne.
+"""Die Integration findet ihren Kern ohne jeden Suchpfad-Griff.
 
-Nachtrag zu #11 (Claude): das Nachbarverzeichnis VORNE an den Suchpfad
-gestellt beschattet in einer echten Installation die Standardbibliothek
-und Home Assistant. Eine ``types.py`` im Konfigurationsverzeichnis legt
-Home Assistant lahm, mit einem Fehlerbild, das niemand mit dieser
-Integration in Verbindung bringt.
+Form-Entscheidung zu #11 (Befund a): der Kern wohnt als Unterpaket in
+der Integration (``custom_components/hacs_lab/core``). Damit entfaellt
+der Fallback ganz -- und das ist hier der Beweis, nicht die Behauptung.
 
-Der Beweis ist eine Sonde im Unterprozess: ein Haus in der Lage einer
-echten Installation (Integration + Kern daneben), bewusst OHNE Eintrag
-auf dem Suchpfad, dazu Gift-Dateien, die stdlib-Module vortaeuschen.
-Die Integration muss den Kern trotzdem finden, das Haus muss hinten
-stehen, und die Gift-Dateien muessen wirkungslos bleiben. Gegen den
-alten Stand (``insert(0)``) fliegt jede der drei Pruefungen.
+Eine Sonde im Unterprozess richtet ein Haus in der Lage einer echten
+Installation (Integration samt Kern, bewusst OHNE jeden Eintrag auf
+dem Suchpfad), dazu Gift-Dateien, die stdlib-Module vortaeuschen --
+falls irgendwer doch den Suchpfad streckt. Die Integration muss den
+Kern aus dem eigenen Verzeichnis laden, der Suchpfad muss exakt
+unveraendert bleiben, und die Gift-Dateien muessen wirkungslos sein.
+Gegen jeden Stand, der den Suchpfad anfasst, fliegt jede der drei
+Pruefungen -- gegen den alten Fallback (append hinten) genauso wie
+gegen das einst boese insert(0).
 """
 
 from __future__ import annotations
@@ -37,10 +38,15 @@ SONDE = dedent(
     from pathlib import Path
 
     haus = Path(sys.argv[1]).resolve()
-    assert str(haus) not in sys.path, sys.path
 
-    # Das Haus steht bewusst nicht auf dem Suchpfad -- die Lage, in der
-    # der Fallback der Integration greifen muss. Der Kern liegt daneben.
+    # Anfangsstand sichern: das Haus darf spaeter NIRGENDWO stehen.
+    anfang = list(sys.path)
+    assert str(haus) not in anfang, sys.path
+
+    # Das Haus in der Lage einer echten Installation: die Integration
+    # liegt unter custom_components, der Kern IN ihr. Kein hacs_lab an
+    # der Wurzel, kein Eintrag auf dem Suchpfad -- genau hier muss die
+    # Integration ohne jede Suche auskommen.
     wurzel = types.ModuleType("custom_components")
     wurzel.__path__ = [str(haus / "custom_components")]
     sys.modules["custom_components"] = wurzel
@@ -55,12 +61,14 @@ SONDE = dedent(
     sys.modules["custom_components.hacs_lab"] = modul
     spec.loader.exec_module(modul)
 
-    # Der Kern wurde gefunden: der Fallback hat geholfen, nicht gestoert.
-    assert "hacs_lab.core.forge" in sys.modules
+    # Der Kern wurde gefunden -- als Unterpaket, aus demselben Ordner.
+    kern = sys.modules.get("custom_components.hacs_lab.core.forge")
+    assert kern is not None, "Kern wurde nicht mitgeladen"
+    assert str(haus) in str(kern.__file__), kern.__file__
 
-    # Das Haus steht hinten -- nicht vorne.
-    assert sys.path[-1] == str(haus), "Haus steht nicht hinten"
-    assert sys.path[0] != str(haus), "Haus steht vorne"
+    # Der Suchpfad blieb exakt unveraendert -- kein append, kein
+    # insert, kein Kunststueck. Das ist die eigentliche Behauptung.
+    assert sys.path == anfang, "Suchpfad wurde veraendert"
 
     # Der Giftbecher: stdlib-Module duerfen nicht aus dem Haus kommen.
     geprueft = 0
@@ -77,20 +85,22 @@ SONDE = dedent(
 
 
 def haus_richten(tmp_path: Path) -> Path:
-    """Ein Haus wie eine echte Installation: Integration, Kern daneben."""
+    """Ein Haus wie eine echte Installation: Integration, Kern inklusive."""
     haus = tmp_path / "haus"
     shutil.copytree(REPO / "custom_components", haus / "custom_components")
-    shutil.copytree(REPO / "hacs_lab", haus / "hacs_lab")
+    assert not (REPO / "hacs_lab").exists(), (
+        "Kern liegt noch an der Wurzel -- das widerspricht der Form aus #11"
+    )
     for name in GIFT_KANDIDATEN:
         (haus / f"{name}.py").write_text(
-            'raise RuntimeError("Beschattung durch " + __file__)\n',
+            'raise RuntimeError("Beschattung duerfte nie wirken: " + __file__)\n',
             encoding="utf-8",
         )
     return haus
 
 
-async def test_fallback_stellt_das_haus_nur_hinten_auf(tmp_path: Path) -> None:
-    """Nachtrag zu #11, Befund a: beschattet stdlib und HA nie wieder."""
+async def test_kern_wird_ohne_jeden_suchpfad_gefunden(tmp_path: Path) -> None:
+    """Form aus #11: kein sys.path-Griff, Kern aus dem eigenen Ordner."""
     haus = haus_richten(tmp_path)
     sonde = tmp_path / "sonde.py"
     sonde.write_text(SONDE, encoding="utf-8")

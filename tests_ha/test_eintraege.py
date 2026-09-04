@@ -14,6 +14,7 @@ from homeassistant.helpers.storage import Store
 
 from custom_components.hacs_lab.ablage import Ablage
 from custom_components.hacs_lab.const import ABLAGE_VERSION, ablage_schluessel
+from custom_components.hacs_lab.core.identity import GITHUB, GITLAB, RepositoryIdentity
 from custom_components.hacs_lab.eintraege import (
     AdresseUngueltig,
     BereitsVorhanden,
@@ -22,7 +23,6 @@ from custom_components.hacs_lab.eintraege import (
     adresse_zerlegen,
     kategorie_aus_topics,
 )
-from hacs_lab.core.identity import GITHUB, GITLAB, RepositoryIdentity
 
 SCHLUESSEL = ablage_schluessel("gitlab.example.net")
 

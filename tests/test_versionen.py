@@ -1,7 +1,6 @@
 """Update-Erkennung: der Punkt, an dem die Erweiterung ihren Zweck erfuellt."""
 
 import pytest
-
 from hacs_lab.core.forge import Release
 from hacs_lab.core.versionen import (
     ist_vorabversion,

@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from hacs_lab.core.identity import RepositoryIdentity, strip_suffix
-from hacs_lab.core.validierung import KATEGORIEN
+from .core.identity import RepositoryIdentity, strip_suffix
+from .core.validierung import KATEGORIEN
 
 if TYPE_CHECKING:
     from .ablage import Ablage

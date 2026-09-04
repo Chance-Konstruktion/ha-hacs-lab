@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import pytest
-
 from hacs_lab.core.aktualisierungen import Fund, Pruefauftrag, lauf, pruefe
 from hacs_lab.core.forge import ForgeFehler
 from hacs_lab.core.gitlab_forge import GitLabForge
-from tests.attrappe import FakeHttp
+
+from tests.attrappe_kern import FakeHttp
 
 HOST = "gitlab.example.net"
 

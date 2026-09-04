@@ -34,21 +34,19 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from hacs_lab.core.aktualisierungen import Fund, Pruefauftrag, lauf
-from hacs_lab.core.forge import ForgeFehler, RepositoryInfo
-
 from .const import (
     CONF_ABSTAND_MINUTEN,
     DOMAIN,
     STANDARD_ABSTAND_MINUTEN,
 )
+from .core.aktualisierungen import Fund, Pruefauftrag, lauf
+from .core.forge import ForgeFehler, RepositoryInfo
 from .eintraege import kategorie_aus_topics
 from .stand import Staende
 
 if TYPE_CHECKING:
-    from hacs_lab.core.gitlab_forge import GitLabForge
-
     from . import Laufzeit
+    from .core.gitlab_forge import GitLabForge
     from .eintraege import Eintraege, Eintrag
 
 _LOGGER = logging.getLogger(__name__)

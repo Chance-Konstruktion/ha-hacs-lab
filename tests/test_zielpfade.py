@@ -5,7 +5,6 @@ ruehrt eine Datei an, das Entpacken ist Sache von test_entpacken."""
 from pathlib import PurePosixPath
 
 import pytest
-
 from hacs_lab.core.zielpfade import (
     Ausschnitt,
     ZielpfadFehler,

@@ -13,7 +13,6 @@ import struct
 import zipfile
 
 import pytest
-
 from hacs_lab.core.entpacken import (
     ArchivBeschaedigt,
     BoesesArtefakt,

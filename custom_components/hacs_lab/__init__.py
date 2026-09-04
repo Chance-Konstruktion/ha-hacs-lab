@@ -1,40 +1,25 @@
 """Home-Assistant-Schicht von HACS*lab (Stufe M2: das Geruest).
 
 Die Trennung ist Absicht und Architektur-Entscheidung: alles, was ohne
-Home Assistant auskommt, liegt in ``hacs_lab/core`` und ist dort ohne
-HA-Installation testbar. Diese Schicht hier macht nichts Eigenes --
-sie reicht Home Assistants aiohttp-Sitzung an den HTTP-Klienten
-weiter (ARCHITEKTUR.md, Entscheidung 3) und haengt die Bausteine des
-Kerns an einander.
+Home Assistant auskommt, liegt in ``core/`` innerhalb dieser
+Integration (Form-Entscheidung zu #11, ARCHITEKTUR.md Entscheidung 5)
+und bleibt dort ohne HA-Installation testbar. Diese Schicht hier macht
+nichts Eigenes -- sie reicht Home Assistants aiohttp-Sitzung an den
+HTTP-Klienten weiter (ARCHITEKTUR.md, Entscheidung 3) und haengt die
+Bausteine des Kerns an einander.
 
-Wie diese Integration den Kern findet: ``hacs_lab`` liegt im
-Entwicklungs-Check-out neben ``custom_components``. Beim Lauf aus einem
-ausgepackten Stand liegt es ebenso daneben -- deshalb reicht ein
-einziger Fallback auf das Nachbarverzeichnis. Der Fallback haengt das
-Verzeichnis hinten an und stellt es nie vorne: vorne gestellt stuende
-es vor der Standardbibliothek, und jede Datei dort -- in einer echten
-Installation ist das ``/config`` -- beschattete stdlib-Module und
-Home Assistant (Nachtrag zu #11). Der endgueltige Vertrieb
-(pip-Paket oder Release-Form) ist Stufe M10.
+Wie diese Integration den Kern findet: ueberhaupt nicht suchen. Der
+Kern ist ein Unterpaket dieser Integration; die Importe sind relativ
+(``from .core.forge import ...``), der Suchpfad bleibt unberuehrt.
+Egal ob Entwicklungs-Check-out, entpackter Release oder Handkopie --
+das Verzeichnis, das die Integration enthaelt, enthaelt auch den Kern.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import logging
-import sys
 from dataclasses import dataclass
 from datetime import timedelta
-from pathlib import Path
-
-if importlib.util.find_spec("hacs_lab") is None:
-    # Lauf aus dem Entwicklungs- oder Release-Verzeichnis: der Kern
-    # liegt zwei Ebenen hoeher, direkt neben custom_components.
-    # Hinten anstellen, nie vorne: vorne gestellt beschattete dieses
-    # Verzeichnis die Standardbibliothek und Home Assistant -- jede
-    # Datei im Konfigurationsverzeichnis kaeme beim Import zuerst
-    # (Nachtrag zu #11, Befund a).
-    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
 from homeassistant.components import websocket_api as ha_websocket_api
 from homeassistant.config_entries import ConfigEntry
@@ -49,10 +34,6 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from hacs_lab.core.forge import ForgeFehler
-from hacs_lab.core.gitlab_forge import GitLabForge
-from hacs_lab.http_aiohttp import AiohttpClient
-
 from .ablage import Ablage
 from .aktualisierer import _kennung
 from .const import (
@@ -64,6 +45,9 @@ from .const import (
     STANDARD_ABSTAND_MINUTEN,
     ablage_schluessel,
 )
+from .core.forge import ForgeFehler
+from .core.gitlab_forge import GitLabForge
+from .core.http_aiohttp import AiohttpClient
 from .eintraege import Eintraege
 from .frontend import richten as oberflaeche_richten
 from .websocket_api import BEFEHLE
