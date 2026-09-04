@@ -86,7 +86,7 @@ To make a GitLab project findable and installable by HACS*lab:
    {
      "name": "My integration",
      "render_readme": true,
-     "homeassistant": "2024.6.0"
+     "homeassistant": "2025.2.0"
    }
    ```
 
