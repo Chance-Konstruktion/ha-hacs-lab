@@ -100,3 +100,22 @@ async def test_instanzweite_suche_geht_ohne_gruppe():
     treffer = await GitLabForge(http, HOST).suche_nach_topic("hacs")
     assert len(treffer) == 1
     assert "include_subgroups" not in http.aufrufe[0][1]
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nennen_die_web_ansichten():
+    """Tickets und Releases: die Links gehoeren dem Anbieter (Stufe M7).
+
+    Ohne web_url bleibt beides leer -- niemand ratet Adressen.
+    """
+    info = await forge(json_antworten={"/projects/": projekt()}).repository("foo/bar")
+    assert info.web_url == "https://gitlab.example.net/foo/bar"
+    assert info.tickets_url == "https://gitlab.example.net/foo/bar/-/issues"
+    assert info.releases_url == "https://gitlab.example.net/foo/bar/-/releases"
+
+    bloss = projekt()
+    del bloss["web_url"]
+    info = await forge(json_antworten={"/projects/": bloss}).repository("foo/bar")
+    assert info.web_url == ""
+    assert info.tickets_url == ""
+    assert info.releases_url == ""

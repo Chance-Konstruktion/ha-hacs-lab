@@ -33,7 +33,14 @@ class Release:
 
 @dataclass(frozen=True)
 class RepositoryInfo:
-    """Was ein Anbieter ueber ein Repository verraet."""
+    """Was ein Anbieter ueber ein Repository verraet.
+
+    ``tickets_url`` und ``releases_url`` sind die Web-Ansichten von
+    Tickets und Releases -- pures Anbieterwissen, darum gehoert das
+    Fuellen in die Anbieterklasse (und nirgendwo sonst, Stufe M7).
+    Ein Anbieter ohne solche Ansichten laesst beide leer; die
+    Oberflaeche versteckt die Verweise dann stillschweigend.
+    """
 
     provider_id: str
     full_name: str
@@ -44,6 +51,8 @@ class RepositoryInfo:
     offene_tickets: int = 0
     archiviert: bool = False
     web_url: str = ""
+    tickets_url: str = ""
+    releases_url: str = ""
 
 
 class HttpClient(Protocol):
