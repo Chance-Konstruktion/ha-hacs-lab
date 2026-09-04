@@ -77,7 +77,7 @@ hinzufuegen und wieder entfernen; `config_flow`-Tests mit
 
 ---
 
-## M3 -- Custom Repository hinzufuegen
+## M3 -- Custom Repository hinzufuegen (erledigt)
 
 **Ziel:** Das, was HACS mit GitHub kann, mit einer GitLab-Adresse.
 
@@ -94,7 +94,11 @@ ein gleichnamiges GitHub-Repo verdraengt es nicht.
 
 ---
 
-## M4 -- Installation und Deinstallation
+## M4 -- Installation und Deinstallation (M4a erledigt, M4b offen)
+
+**Stand:** M4a (Entpacken und Zielpfade, MR !3, Issue #12) ist
+erledigt. M4b -- die Installation in Home Assistant -- wartet auf die
+Auslieferungsform aus M0.5 (Issue #11) und bleibt Issue #4.
 
 **Ziel:** Dateien landen an der richtigen Stelle.
 
@@ -116,7 +120,7 @@ Integration aus dem eigenen GitLab laeuft nach der Installation in HA.
 
 ---
 
-## M5 -- Update-Erkennung
+## M5 -- Update-Erkennung (erledigt)
 
 **Ziel:** Der eigentliche Zweck: neue Releases fallen auf.
 
@@ -132,7 +136,7 @@ Integration aus dem eigenen GitLab laeuft nach der Installation in HA.
 
 ---
 
-## M6 -- Entdeckung ueber Topics
+## M6 -- Entdeckung ueber Topics (erledigt)
 
 **Ziel:** Nicht nur einzeln hinzufuegen, sondern finden.
 
@@ -150,7 +154,7 @@ Treffer.
 
 ---
 
-## M7 -- Oberflaeche
+## M7 -- Oberflaeche (erledigt)
 
 **Ziel:** Bedienung wie im HACS-Store, nur eben mit `*lab`.
 
@@ -166,7 +170,7 @@ aktualisieren, entfernen -- alles ueber die Oberflaeche.
 
 ---
 
-## M8 -- Bestand und Robustheit
+## M8 -- Bestand und Robustheit (erledigt)
 
 **Ziel:** Es haelt auch, wenn etwas schiefgeht.
 
@@ -184,7 +188,7 @@ Diagnose.
 
 ---
 
-## M9 -- Dritter Anbieter
+## M9 -- Dritter Anbieter (erledigt)
 
 **Ziel:** Der Beweis, dass die Schnittstelle traegt.
 
@@ -198,7 +202,7 @@ Aenderungen ausserhalb des neuen Anbieters bleiben klein und benannt.
 
 ---
 
-## M10 -- Nach draussen
+## M10 -- Nach draussen (erledigt)
 
 **Ziel:** Nicht nur bei uns nuetzlich.
 
