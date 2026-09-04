@@ -9,7 +9,7 @@
     "@super-z"
   ],
   "config_flow": true,
-  "icon": "mdi:flask",
+  "icon": "mdi:gitlab",
   "iot_class": "cloud_polling",
   "requirements": []
 }

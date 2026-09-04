@@ -65,8 +65,9 @@ by hand. It takes about two minutes.
 > first: `custom_components/hacs_lab/` **and** the stray top-level
 > `hacs_lab/` folder the old archive dropped next to it. Then extract the
 > v0.1.1 archive (one folder, core included) and restart. Since v0.1.1
-> the integration also carries its icon (`mdi:flask`) in the settings
-> page — `icon.svg` in this repository is the source of it.
+> the integration also carries an icon in the settings page
+> (`mdi:gitlab`); `icon.svg` in this repository is the brand artwork —
+> the GitLab fox on HACS purple, both marks merged into one.
 
 ## Using HACS*lab
 
@@ -130,7 +131,7 @@ atomically, rolled back on failure.
 ## Repository layout
 
 ```
-icon.svg                      project icon — flask, liquid, sparkle
+icon.svg                      project icon — GitLab fox on HACS purple
 hacs.json                     repository conventions for HACS*lab itself
 custom_components/hacs_lab/   the integration — thin Home Assistant layer
   manifest.json               domain, version, config flow, icon
