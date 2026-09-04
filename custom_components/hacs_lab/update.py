@@ -132,8 +132,15 @@ class HacsLabUpdateEntity(UpdateEntity):
         return self._laeuft_gerade
 
     async def async_added_to_hass(self) -> None:
-        """Auf den Takt horchen -- jede Runde schreibt den neuen Stand."""
+        """Auf den Takt horchen -- und auf den eigenen Stand (M4b).
+
+        Der Takt bringt neue Funds; der Stand aendert sich auch ohne
+        Takt (Deinstallation ueber den Befehl, Vorab-Schalter). Ohne
+        das Abonnement stunde die installierte Version in der Entity,
+        bis der naechste Herzschlag kaeme.
+        """
         self.async_on_remove(self._aktualisierer.async_add_listener(self._schreibe))
+        self.async_on_remove(self._staende.beobachte(self._schreibe))
 
     def _schreibe(self) -> None:
         if self.hass is not None:

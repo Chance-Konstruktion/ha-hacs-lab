@@ -16,6 +16,7 @@ ueberall in der Ablage.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -82,6 +83,7 @@ class Staende:
     def __init__(self, ablage: Ablage) -> None:
         self._ablage = ablage
         self._karte: dict[str, Stand] = {}
+        self._beobachter: list[Callable[[], None]] = []
 
     async def laden(self) -> None:
         """Liest die Karte aus der Ablage; mehrfach aufrufbar, ergaenzt nur.
@@ -100,6 +102,29 @@ class Staende:
     def stand(self, schluessel: str) -> Stand:
         """Der Stand eines Eintrags -- unbekannt heisst leer."""
         return self._karte.get(schluessel) or Stand()
+
+    def beobachte(self, rueckruf: Callable[[], None]) -> Callable[[], None]:
+        """Jede Aenderung melden -- die Rueckgabe meldet wieder ab.
+
+        Stufe M4b: veraendert nicht die eigene Entity den Stand (zum
+        Beispiel der Deinstallations-Befehl), wuesste sie sonst erst
+        beim naechsten Herzschlag davon. Beobachter sind synchron und
+        duerfen nichts werfen -- ein kaputter Beobachter darf den
+        Ablauf nicht umwerfen.
+        """
+        self._beobachter.append(rueckruf)
+
+        def abmelden() -> None:
+            try:
+                self._beobachter.remove(rueckruf)
+            except ValueError:  # schon abgemeldet
+                pass
+
+        return abmelden
+
+    def _melden(self) -> None:
+        for rueckruf in list(self._beobachter):
+            rueckruf()
 
     async def setzen(
         self,
@@ -125,4 +150,5 @@ class Staende:
         await self._ablage.sicher_teil(
             FELD, {schluss: wert.as_dict() for schluss, wert in self._karte.items()}
         )
+        self._melden()
         return neu
