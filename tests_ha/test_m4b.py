@@ -325,7 +325,10 @@ async def test_deinstallation_raeumt_genau_den_weg(
     """
     speichern(hass_storage, [eintrag_daten()])
     nachbar = Path(hass.config.config_dir) / "custom_components" / "andere"
-    nachbar.mkdir(parents=True)
+    # exist_ok: der Nachbar bleibt nach dem Test stehen (er BEWEISST, dass
+    # die Deinstallation daneben nichts anfasst) -- ein zweiter Lauf im
+    # selben Haus darf daran nicht scheitern.
+    nachbar.mkdir(parents=True, exist_ok=True)
     (nachbar / "manifest.json").write_text("{}", encoding="utf-8")
 
     sitzung_einpflanzen(

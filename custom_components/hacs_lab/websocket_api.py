@@ -2,10 +2,14 @@
 
 Das Panel (``frontend/panel.js``) redet mit Home Assistant, nicht mit
 der Welt: Diese Datei ist die ganze Schnittstelle zwischen beiden.
-Sechs Befehle, mehr braucht kein Laden:
+Sieben Befehle, mehr braucht kein Laden:
 
 * ``hacs_lab/eintraege`` -- die Liste der beobachteten Repositories,
   mit Stand (installiert), neuester Version, Sternen und Verweisen
+* ``hacs_lab/erneuern`` -- der frische Lauf: jeder Aktualisierer wird
+  jetzt herumgedreht, dann kommt dieselbe Liste wie oben (plus die
+  Instanzen, deren Lauf scheiterte). Die Bedienung ruft das, sobald
+  der Laden betreten wird -- die Liste haengt dann nicht am Takt.
 * ``hacs_lab/entdecken`` -- der Scan aus Stufe M6: ganze Instanz oder
   Gruppe, Ergebnisliste mit allem, was die Oberflaeche zeigt
 * ``hacs_lab/detail`` -- Stammdaten, README und Releases eines
@@ -39,6 +43,8 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
+from .aktualisierer import hole_aktualisierer
+from .const import DOMAIN
 from .core.entdeckung import entdecke
 from .core.forge import ForgeFehler, NichtGefunden
 from .core.identity import SUFFIX, RepositoryIdentity
@@ -113,21 +119,13 @@ def _fund_anteil(laufzeit: Laufzeit, storage_key: str) -> dict[str, str]:
     }
 
 
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "hacs_lab/eintraege"})
-@websocket_api.async_response
-async def ws_eintraege(
-    hass: HomeAssistant,
-    connection: ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    """Die Liste alles Beobachteten, ueber alle Instanzen.
+async def _liste(hass: HomeAssistant) -> dict[str, Any]:
+    """Die Antwort der Eintraege: alle Zeilen, alle Instanzen, Kategorien.
 
-    Sterne und Beschreibung sind ein frischer Blick je Eintrag: was
-    gestern drei Sterne hatte, kann heute fuenf haben. Ein Fehler
-    dabei (Repository verschwunden, Netz weg) reisst die Liste nicht
-    mit -- der Eintrag erscheint mit Fehlertext, wie der Lauf aus
-    Stufe M5 ihn auch traegt.
+    Zwei Befehle schicken sie -- ``eintraege`` direkt, ``erneuern`` nach
+    dem frischen Lauf. Der Bau gehoert zusammen, damit beide dasselbe
+    sagen: Sterne und Beschreibung frisch je Eintrag, der Stand aus der
+    Ablage, die neueste Version aus dem letzten Lauf des Aktualisierers.
     """
     zeilen: list[dict[str, Any]] = []
     for host, laufzeit in sorted(_laufzeiten(hass).items()):
@@ -164,14 +162,80 @@ async def ws_eintraege(
                 zeile["releases_url"] = info.releases_url
             zeilen.append(zeile)
 
-    connection.send_result(
-        msg["id"],
-        {
-            "eintraege": zeilen,
-            "instanzen": sorted(_laufzeiten(hass)),
-            "kategorien": list(KATEGORIEN),
-        },
-    )
+    return {
+        "eintraege": zeilen,
+        "instanzen": sorted(_laufzeiten(hass)),
+        "kategorien": list(KATEGORIEN),
+    }
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "hacs_lab/eintraege"})
+@websocket_api.async_response
+async def ws_eintraege(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Die Liste alles Beobachteten, ueber alle Instanzen.
+
+    Sterne und Beschreibung sind ein frischer Blick je Eintrag: was
+    gestern drei Sterne hatte, kann heute fuenf haben. Ein Fehler
+    dabei (Repository verschwunden, Netz weg) reisst die Liste nicht
+    mit -- der Eintrag erscheint mit Fehlertext, wie der Lauf aus
+    Stufe M5 ihn auch traegt.
+    """
+    connection.send_result(msg["id"], await _liste(hass))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "hacs_lab/erneuern"})
+@websocket_api.async_response
+async def ws_erneuern(
+    hass: HomeAssistant,
+    connection: ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Der frische Lauf: jeden Aktualisierer herumdrehen, dann die Liste.
+
+    Das Panel ruft das, sobald jemand den Laden betritt -- die Liste
+    soll nicht am Takt haengen (der Minuten oder Stunden spaeter
+    schlaegt). Der Lauf ist derselbe wie im Takt: Stammdaten ueber die
+    ID, Kern-Lauf je Eintrag, Reparaturen. Instanzen ohne Aktualisierer
+    (leere Liste, nie eine update-Entity) bekommen ihren ersten --
+    :func:`hole_aktualisierer` legt ihn idempotent an.
+
+    Ein scheiternder Lauf reisst die Antwort nicht um: die Instanz
+    steht mit Grund in ``gescheitert``, die Liste kommt trotzdem (aus
+    dem letzten erfolgreichen Stand des Aktualisierers).
+    """
+    gescheitert: dict[str, str] = {}
+    eintraege_karte: dict[str, Any] = hass.data.get(DOMAIN, {})
+    for eintrag_id, laufzeit in sorted(
+        eintraege_karte.items(), key=lambda paar: paar[1].forge.host
+    ):
+        eintrag = hass.config_entries.async_get_entry(eintrag_id)
+        if eintrag is None:
+            continue
+        aktualisierer = hole_aktualisierer(hass, eintrag)
+        if aktualisierer is None:
+            continue
+        await aktualisierer.async_refresh()
+        if not aktualisierer.last_update_success:
+            gescheitert[laufzeit.forge.host] = (
+                str(aktualisierer.last_exception)
+                if aktualisierer.last_exception is not None
+                else "unerwarteter Fehler"
+            )
+            _LOGGER.warning(
+                "Frischer Lauf fuer %s gescheitert: %s",
+                laufzeit.forge.host,
+                gescheitert[laufzeit.forge.host],
+            )
+
+    antwort = await _liste(hass)
+    antwort["gescheitert"] = gescheitert
+    connection.send_result(msg["id"], antwort)
 
 
 @websocket_api.require_admin
@@ -506,6 +570,7 @@ async def ws_deinstallieren(
 #: Alle Befehle dieser Datei -- ``__init__.py`` meldet sie der Reihe nach an.
 BEFEHLE = (
     ws_eintraege,
+    ws_erneuern,
     ws_entdecken,
     ws_detail,
     ws_hinzufuegen,

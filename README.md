@@ -53,7 +53,9 @@ by hand. It takes about two minutes.
    dialog checks the connection and tells you plainly when it fails.
    Several instances sit side by side — one per GitLab host, each with its
    own entries.
-5. After setup you get a sidebar panel — no YAML anywhere.
+5. After setup you get a sidebar panel — no YAML anywhere. The sidebar
+   entry wears the GitLab tanuki, served by the integration itself
+   (`frontend/iconset.js`, registered on every frontend page).
 
 > The setup dialog and the panel speak German and English — Home
 > Assistant picks the language, the integration ships both
@@ -83,13 +85,20 @@ by hand. It takes about two minutes.
 
 ## Using HACS*lab
 
+- **The panel:** one page, collapsible sections like the HACS store —
+  *Updatable*, *Installable*, *New* (scan findings), *Downloadable* —
+  each header counting its cards. The top bar follows your GitLab:
+  tanuki mark, a "Search or go to …" field, refresh and add tools,
+  breadcrumbs in the detail view. Opening the panel triggers a fresh
+  update check on every instance (`hacs_lab/erneuern`) — the list
+  never waits for the heartbeat interval.
 - **Add a custom repository:** open the panel, choose *Add*, paste the
   project URL, pick a category. HACS*lab reads the metadata, the version,
   and offers the install.
 - **Discover:** repositories whose owner set the topic `hacs` on the GitLab
-  side show up under *Discovery* — with description, stars, and the latest
-  version. A second topic (`hacs-plugin`, `hacs-theme`, …) fixes the
-  category without asking.
+  side show up in the panel's *New* section — with description, stars, and
+  the latest version. A second topic (`hacs-plugin`, `hacs-theme`, …) fixes
+  the category without asking.
 - **Updates:** every entry gets an update entity and a heartbeat whose
   interval you can tune per entry. A new release or tag raises the update,
   the install service swaps the files safely — staged in a temporary
@@ -156,7 +165,9 @@ hacs.json                     repository conventions for HACS*lab itself
 custom_components/hacs_lab/   the integration — thin Home Assistant layer
   manifest.json               domain, version, config flow, icon
   config_flow.py              setup dialog with connection check
-  frontend/panel.js           the sidebar panel (no YAML)
+  frontend/panel.js           the sidebar panel (no YAML) — GitLab-style
+  frontend/iconset.js         the tanuki as sidebar icon (own icon
+                              collection `hacs-lab`, on every page)
   translations/               dialog texts
   core/                       the core — pure Python, no Home Assistant,
                               no network in tests; lives here since the
