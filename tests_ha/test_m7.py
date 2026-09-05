@@ -195,6 +195,13 @@ async def test_panel_ist_ohne_yaml_angemeldet(
     assert "/config/integrations/integration/hacs_lab" in koerper
     assert "#FFD599" in koerper  # die Pastell-Palette der Buchstaben
 
+    # Flug 2092: die Fusszeile -- Fuchs und Geluebde am unteren Rand,
+    # in beiden Sprachen (das Wort duerfen die Imker selber lesen).
+    assert "hl-fuss" in koerper
+    assert "fuss_zeile" in koerper
+    assert "no GitHub monopoly shit" in koerper
+    assert "hl-fuchs-tanz" in koerper  # der Fuchs tanzt bei Streicheln
+
     # Das Iconset wird neben der Panel-Datei eigenen Weg geliefert.
     antwort = await client.get("/hacs_lab/iconset.js")
     assert antwort.status == 200

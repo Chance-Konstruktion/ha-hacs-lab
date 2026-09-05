@@ -157,6 +157,7 @@ const TEXTE = {
     },
     scan_laeuft: "Suche läuft …",
     frisch_laeuft: "frischer Lauf …",
+    fuss_zeile: "Für die Freiheit gebaut — kein GitHub-Monopol-Scheiß.",
     lade_titel: "Wird geladen …",
     lade_text: "Der Bestand kommt aus dem Lager — einen Augenblick.",
     detail_lade_text: "Stammdaten, Beschreibung und Releases werden geholt.",
@@ -234,6 +235,7 @@ const TEXTE = {
     },
     scan_laeuft: "Scanning …",
     frisch_laeuft: "fresh run …",
+    fuss_zeile: "Made for freedom — no GitHub monopoly shit.",
     lade_titel: "Loading …",
     lade_text: "The stock is on its way from the store cache — one moment.",
     detail_lade_text: "Fetching metadata, description, and releases.",
@@ -1039,6 +1041,7 @@ class HacsLabPanel extends HTMLElement {
           ${this._fehler ? `<div class="hl-fehler">${fliehe(this._fehler)}</div>` : ""}
           ${inhalt}
         </div>
+        ${this._html_fusszeile()}
       </div>`;
     this._binden();
   }
@@ -1112,6 +1115,22 @@ class HacsLabPanel extends HTMLElement {
                   aria-label="${fliehe(t.neu_knopf)}">${PLUS_SVG}</button>
         </div>
       </div>`;
+  }
+
+  /** Die Fusszeile (Flug 2092): der Gruss vom unteren Rand.
+   *
+   * Wer ganz runterscrollt, bekommt den Grund des Hauses in einer
+   * Zeile: der Fuchs und das Geluebde -- fuer die Freiheit gebaut,
+   * gegen das Monopol. Der Fuchs tanzt ein kleines Stueck, wenn man
+   * ihn streichelt (hover) -- sonst steht er still und wartet.
+   */
+  _html_fusszeile() {
+    const t = this._t;
+    return `
+      <footer class="hl-fuss" role="contentinfo">
+        ${tanuki_svg("hl-fuss-tanuki")}
+        <span class="hl-fuss-wort">${fliehe(t.fuss_zeile)}</span>
+      </footer>`;
   }
 
   /** Der Laden: Werkzeugleiste, Instanz-Plaettchen, Meldung, Abschnitte. */
@@ -1524,7 +1543,19 @@ const STIL = `
 @keyframes hl-drehen { to { transform: rotate(360deg); } }
 
 /* -- Der Laden darunter */
-.hl-inhalt { max-width: 1000px; margin: 0 auto; padding: 12px 16px 48px; }
+.hl-inhalt { max-width: 1000px; margin: 0 auto; padding: 12px 16px 8px; }
+
+/* -- Die Fusszeile (Flug 2092): Fuchs und Geluebde am unteren Rand */
+.hl-fuss { max-width: 1000px; margin: 0 auto; padding: 20px 16px 32px;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  color: var(--secondary-text-color); font-size: 12.5px;
+  border-top: 1px solid rgba(127, 127, 127, .25); }
+.hl-fuss-tanuki { height: 18px; width: auto; flex: 0 0 auto;
+  transition: transform .25s ease; }
+.hl-fuss:hover { color: var(--primary-text-color); }
+.hl-fuss:hover .hl-fuss-tanuki { animation: hl-fuchs-tanz .6s ease; }
+@keyframes hl-fuchs-tanz { 25% { transform: rotate(-9deg); }
+  60% { transform: rotate(7deg); } 100% { transform: rotate(0); } }
 .hl-fehler { background: var(--error-color, #db4437); color: #fff;
   border-radius: 4px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
 .hl-banner { display: flex; gap: 10px; align-items: flex-start;

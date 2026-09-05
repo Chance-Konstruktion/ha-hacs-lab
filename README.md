@@ -111,7 +111,10 @@ by hand. It takes about two minutes.
   Names follow your theme's text colour — white in dark mode, black in
   light mode. While the first stock is still on its way, the panel shows
   a Home Assistant-style loading card (spinner in your theme's primary
-  colour) instead of an empty store.
+  colour) instead of an empty store. Scroll to the very bottom and the
+  tanuki signs off the page: *"Made for freedom — no GitHub monopoly
+  shit."* — the one-line footer, in your language, with a fox that does
+  a small dance when the pointer strokes it.
 - **Unlimited servers, any mix:** every instance is one config entry —
   set up as many as you like, each with its own provider (GitLab,
   Forgejo, Gitea), token, and interval. The store shows them all as
