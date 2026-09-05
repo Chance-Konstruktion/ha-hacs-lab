@@ -20,7 +20,10 @@ Netz.
 
 from __future__ import annotations
 
-from pathlib import Path
+import io
+import json
+import zipfile
+from pathlib import Path, PurePosixPath
 
 import pytest
 from hacs_lab.core.forge import Release
@@ -28,7 +31,9 @@ from hacs_lab.core.zielpfade import ist_zielpfad
 from hacs_lab.installation import (
     InstallationsFehler,
     _deinstalliere_sync,
+    _installiere_sync,
     beschaffe_archiv,
+    finde_lagerform,
     lese_archiv_datei,
     waehle_anhang,
 )
@@ -216,3 +221,212 @@ class TestLeseArchivDatei:
         """Ein Release-Anhang, der kein ZIP ist, wird nicht installiert."""
         with pytest.raises(InstallationsFehler, match="kein ZIP"):
             lese_archiv_datei(b"definitiv kein zip", "manifest.json")
+
+
+# ------------------------------------------------ Lagerform (Befund #15)
+
+
+def _zip(baum: dict[str, bytes]) -> bytes:
+    """Ein ZIP aus {pfad: inhalt} -- stabil sortiert, ohne Ordner-Eintraege."""
+    puffer = io.BytesIO()
+    with zipfile.ZipFile(puffer, "w") as datei:
+        for name in sorted(baum):
+            datei.writestr(name, baum[name])
+    return puffer.getvalue()
+
+
+def _manifest(domain: str, version: str = "1.0.0") -> bytes:
+    """Eine gueltige manifest.json -- Domain und Version einsetzbar."""
+    return json.dumps(
+        {
+            "domain": domain,
+            "name": "Beispiel",
+            "version": version,
+            "documentation": "https://example.org/beispiel",
+        }
+    ).encode("utf-8")
+
+
+class TestLeseArchivDateiTiefe:
+    """Befund #15: die manifest.json kann vier Ebenen tief liegen."""
+
+    def test_tiefer_einziger_treffer_zaehlt(self):
+        archiv = _zip(
+            {
+                "beispiel-v1.0.0/README.md": b"repo-wurzel",
+                "beispiel-v1.0.0/hacs.json": b'{"name": "Beispiel"}',
+                "beispiel-v1.0.0/custom_components/bienentanz/const.py": b"DOMAIN = 1",
+                "beispiel-v1.0.0/custom_components/bienentanz/manifest.json": _manifest(
+                    "bienentanz"
+                ),
+            }
+        )
+        assert lese_archiv_datei(archiv, "manifest.json") == _manifest("bienentanz")
+
+    def test_flacher_geht_vor_tiefem(self):
+        """Die hacs.json der Repo-Wurzel zaehlt mehr als eine tiefe Kopie."""
+        archiv = _zip(
+            {
+                "beispiel-v1.0.0/hacs.json": b'{"name": "wurzel"}',
+                "beispiel-v1.0.0/docs/beispiele/hacs.json": b'{"name": "tief"}',
+            }
+        )
+        assert lese_archiv_datei(archiv, "hacs.json") == b'{"name": "wurzel"}'
+
+    def test_zwei_tiefe_bleiben_mehrdeutig(self):
+        archiv = _zip(
+            {
+                "a/custom_components/eins/manifest.json": _manifest("eins"),
+                "b/custom_components/zwei/manifest.json": _manifest("zwei"),
+            }
+        )
+        assert lese_archiv_datei(archiv, "manifest.json") is None
+
+    def test_wurzel_und_ordner_bleiben_wie_sie_sind(self):
+        """Die alte Regel gilt weiter: Wurzel oder ein Ordner, eindeutig."""
+        for pfad in ("manifest.json", "bienentanz/manifest.json"):
+            archiv = _zip({pfad: _manifest("bienentanz")})
+            assert lese_archiv_datei(archiv, "manifest.json") == _manifest("bienentanz")
+
+
+class TestFindeLagerform:
+    """Entschluss b zu #15: die Lagerform kennt ihre Tiefe selbst."""
+
+    def test_tag_quell_archiv_liefert_den_vollen_weg(self):
+        archiv = _zip(
+            {
+                "beispiel-v1.0.0/README.md": b"repo-wurzel",
+                "beispiel-v1.0.0/custom_components/bienentanz/manifest.json": (
+                    _manifest("bienentanz")
+                ),
+            }
+        )
+        assert (
+            finde_lagerform(archiv, "bienentanz")
+            == "beispiel-v1.0.0/custom_components/bienentanz"
+        )
+
+    def test_gebauter_anhang_liefert_den_ordner(self):
+        archiv = _zip({"bienentanz/manifest.json": _manifest("bienentanz")})
+        assert finde_lagerform(archiv, "bienentanz") == "bienentanz"
+
+    def test_custom_components_ohne_tag_huelle(self):
+        """Die eigene Anhang-Form von hacs-lab: Praefix ohne Tag-Ordner."""
+        archiv = _zip({"custom_components/hacs_lab/manifest.json": _manifest("hacs_lab")})
+        assert finde_lagerform(archiv, "hacs_lab") == "custom_components/hacs_lab"
+
+    def test_wurzelmanifest_ist_keine_lagerform(self):
+        archiv = _zip({"beispiel-v1.0.0/manifest.json": _manifest("bienentanz")})
+        assert finde_lagerform(archiv, "bienentanz") is None
+
+    def test_falscher_ordnername_ist_klartext(self):
+        """custom_components/ kuendigt an, der Ordner loest es nicht ein."""
+        archiv = _zip(
+            {
+                "beispiel-v1.0.0/custom_components/anderer_name/manifest.json": (
+                    _manifest("bienentanz")
+                ),
+            }
+        )
+        with pytest.raises(InstallationsFehler, match="anderer_name"):
+            finde_lagerform(archiv, "bienentanz")
+
+    def test_zwei_lagerformen_sind_raterei(self):
+        archiv = _zip(
+            {
+                "a/custom_components/bienentanz/manifest.json": _manifest("bienentanz"),
+                "b/custom_components/bienentanz/manifest.json": _manifest("bienentanz"),
+            }
+        )
+        with pytest.raises(InstallationsFehler, match="mehrfach"):
+            finde_lagerform(archiv, "bienentanz")
+
+
+class TestInstalliereLagerform:
+    """Der ganze Tausch aus getrockneten Archiven -- ohne Netz, ohne HA."""
+
+    def test_tag_quell_archiv_installiert_nur_die_integration(self, tmp_path: Path):
+        """Repo-Wurzel (README, CI, hacs.json) gehoert NICHT ins Ziel."""
+        archiv = _zip(
+            {
+                "beispiel-v1.0.0/README.md": b"repo-wurzel",
+                "beispiel-v1.0.0/hacs.json": b'{"name": "Beispiel"}',
+                "beispiel-v1.0.0/.gitlab-ci.yml": b"stufen: [form]",
+                "beispiel-v1.0.0/custom_components/bienentanz/__init__.py": b"# tanz",
+                "beispiel-v1.0.0/custom_components/bienentanz/const.py": b"DOMAIN = 1",
+                "beispiel-v1.0.0/custom_components/bienentanz/manifest.json": (
+                    _manifest("bienentanz")
+                ),
+            }
+        )
+
+        weg = _installiere_sync(archiv, "integration", "bienentanz", tmp_path)
+
+        assert weg == PurePosixPath("custom_components/bienentanz")
+        ziel = tmp_path / "custom_components" / "bienentanz"
+        assert (ziel / "manifest.json").read_bytes() == _manifest("bienentanz")
+        assert (ziel / "__init__.py").exists()
+        assert (ziel / "const.py").exists()
+        assert not (ziel / "README.md").exists()
+        assert not (ziel / "hacs.json").exists()
+        assert not (ziel / ".gitlab-ci.yml").exists()
+        assert not (ziel / "custom_components").exists()
+
+    def test_gebauter_anhang_bleibt_bei_der_alten_lagerform(self, tmp_path: Path):
+        archiv = _zip(
+            {
+                "bienentanz/__init__.py": b"# tanz",
+                "bienentanz/manifest.json": _manifest("bienentanz", "1.1.0"),
+            }
+        )
+
+        weg = _installiere_sync(archiv, "integration", "bienentanz", tmp_path)
+
+        assert weg == PurePosixPath("custom_components/bienentanz")
+        ziel = tmp_path / "custom_components" / "bienentanz"
+        assert (ziel / "__init__.py").exists()
+        assert (ziel / "manifest.json").read_bytes() == _manifest("bienentanz", "1.1.0")
+
+    def test_die_eigene_form_installiert_sich_selbst(self, tmp_path: Path):
+        """hacs-labs Anhang behaelt custom_components/ -- und geht jetzt auf."""
+        archiv = _zip(
+            {
+                "custom_components/hacs_lab/manifest.json": _manifest("hacs_lab"),
+                "custom_components/hacs_lab/__init__.py": b"# schicht",
+                "custom_components/hacs_lab/core/entpacken.py": b"# kern",
+            }
+        )
+
+        _installiere_sync(archiv, "integration", "hacs_lab", tmp_path)
+
+        ziel = tmp_path / "custom_components" / "hacs_lab"
+        assert (ziel / "core" / "entpacken.py").exists()
+        assert (ziel / "manifest.json").exists()
+        assert not (ziel / "custom_components").exists()
+
+    def test_wurzelstruktur_bleibt_beim_oberteil(self, tmp_path: Path):
+        """Ohne custom_components/ gilt weiter: der Ordner oben faellt weg."""
+        archiv = _zip(
+            {
+                "beispiel-v1.0.0/__init__.py": b"# tanz",
+                "beispiel-v1.0.0/manifest.json": _manifest("bienentanz"),
+            }
+        )
+
+        _installiere_sync(archiv, "integration", "bienentanz", tmp_path)
+
+        ziel = tmp_path / "custom_components" / "bienentanz"
+        assert (ziel / "__init__.py").exists()
+        assert (ziel / "manifest.json").exists()
+
+    def test_falsche_lagerform_schreibt_nichts(self, tmp_path: Path):
+        archiv = _zip(
+            {
+                "beispiel-v1.0.0/custom_components/anderer_name/manifest.json": (
+                    _manifest("bienentanz")
+                ),
+            }
+        )
+        with pytest.raises(InstallationsFehler, match="anderer_name"):
+            _installiere_sync(archiv, "integration", "bienentanz", tmp_path)
+        assert not any(tmp_path.iterdir())  # kein halber Zustand, gar keiner

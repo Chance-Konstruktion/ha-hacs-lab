@@ -1,13 +1,19 @@
 """Installationsnaht: Release-Anhang oder Tag-Archiv an den Zielort tauschen.
 
 Stufe M4b rundet die Naht ab, die M5 fuer den ``install``-Dienst
-gezogen hat. Drei Dinge kommen dazu:
+gezogen hat. Vier Dinge kommen dazu:
 
 * **Quelle:** der Anhang des Releases, wenn der Besitzer dem Tag ein
   ZIP beigelegt hat (gebaut, nicht gepackt-vom-Quellstand), sonst das
   Archiv des Tags. Die Auswahl ist streng: genau EIN Zip-Anhang wird
   genommen, null oder mehrere bedeuten Rueckfall aufs Tag-Archiv --
   Raterei beim Installieren hilft niemandem.
+* **Tiefe:** seit Befund #15 (Entschluss b) erkennt die Naht die
+  Lagerform ``custom_components/<domain>/`` in jeder Tiefe des
+  Archivs. Tag-Quell-Archive der ueblichen HACS-Repo-Struktur
+  installieren damit ohne gebauten Anhang, und Anhaenge, die den
+  ``custom_components``-Praefix behalten (wie der von hacs-lab
+  selbst), ebenso.
 * **Protokoll:** die Installation vermerkt den Zielweg in der Ablage
   (``stand.pfad``). Ohne Weg keine ehrliche Deinstallation -- und mit
   ihm ist die Rueckwaerts-Frage eine Ja/Nein-Pruefung, kein Globbing.
@@ -109,21 +115,28 @@ def lese_archiv_datei(archiv: bytes, name: str) -> bytes | None:
 
     GitLab-Tag-Archive packen alles unter einen Ordner
     (``projekt-v1.2.0/...``), Release-Anhaenge stehen je nach Bauart in
-    der Wurzel oder ebenfalls unter einem Ordner. Gesucht wird eine
-    Datei dieses Namens genau eine Ebene unter der Wurzel oder in der
-    Wurzel selbst -- mehrdeutige Treffer zaehlen als Fehlschlag, weil
-    Raterei beim Installieren niemandem hilft.
+    der Wurzel oder ebenfalls unter einem Ordner. Gesucht wird der
+    Name in jeder Tiefe, gewaehlt in zwei Stufen (Befund #15): genau
+    EIN flacher Treffer -- Wurzel oder ein Ordner -- gewinnt, auch
+    wenn daneben tiefe Treffer liegen (die hacs.json an der
+    Repo-Wurzel zaehlt mehr als eine, die zufaellig tief steckt). Gibt
+    es keinen flachen Treffer, zaehlt genau EIN tiefer -- so liegt die
+    manifest.json der ueblichen HACS-Struktur unter
+    ``<projekt>/custom_components/<domain>/``. Mehrdeutigkeit ist in
+    beiden Stufen ein Fehlschlag: Raterei beim Installieren hilft
+    niemandem.
     """
-    treffer: list[str] = []
     try:
         with zipfile.ZipFile(io.BytesIO(archiv)) as zip_datei:
-            for info in zip_datei.infolist():
-                if info.is_dir() or "/" + name not in "/" + (info.filename or ""):
-                    continue
-                teile = [t for t in (info.filename or "").split("/") if t]
-                if len(teile) <= 2 and teile[-1] == name:
-                    treffer.append(info.filename)
-            if len(treffer) == 1:
+            treffer = [
+                info.filename
+                for info in zip_datei.infolist()
+                if not info.is_dir() and (info.filename or "").split("/")[-1] == name
+            ]
+            flach = [t for t in treffer if len(t.split("/")) <= 2]
+            if len(flach) == 1:
+                return zip_datei.read(flach[0])
+            if not flach and len(treffer) == 1:
                 return zip_datei.read(treffer[0])
     except zipfile.BadZipFile as fehlschlag:
         raise InstallationsFehler(
@@ -133,12 +146,87 @@ def lese_archiv_datei(archiv: bytes, name: str) -> bytes | None:
     return None
 
 
+def _manifest_ordner(archiv: bytes) -> list[tuple[str, bytes]]:
+    """Alle ``manifest.json`` im Archiv: ihr Ordner und ihr roher Inhalt.
+
+    Jede Tiefe -- hier entscheidet nicht die Tiefe, sondern Ordner und
+    Inhalt gemeinsam (siehe :func:`finde_lagerform`). Die Wurzel zaehlt
+    als Ordner ``""`` mit: ``content_in_root``-Repos haben ihre
+    manifest.json dort, sind aber keine Lagerform.
+    """
+    try:
+        with zipfile.ZipFile(io.BytesIO(archiv)) as zip_datei:
+            fund: list[tuple[str, bytes]] = []
+            for info in zip_datei.infolist():
+                if info.is_dir() or (info.filename or "").split("/")[-1] != _MANIFEST:
+                    continue
+                ordner = (info.filename or "").rsplit("/", 1)[0]
+                fund.append((ordner, zip_datei.read(info.filename)))
+            return fund
+    except zipfile.BadZipFile as fehlschlag:
+        raise InstallationsFehler(
+            "das Archiv ist kein ZIP -- ein Release-Anhang, der kein ZIP "
+            "ist, wird nicht installiert (Befund M4b)"
+        ) from fehlschlag
+
+
+def finde_lagerform(archiv: bytes, domain: str) -> str | None:
+    """Der Archiv-Ordner, dessen Inhalt nach ``custom_components/<domain>/`` gehoert.
+
+    Befund #15, Entschluss b: Tag-Quell-Archive tragen die uebliche
+    HACS-Repo-Struktur ``<projekt>/custom_components/<domain>/``, und
+    auch gebaute Anhaenge behalten den ``custom_components``-Praefix
+    manchmal (der von hacs-lab selbst tut es). Gesucht wird der Ordner
+    ueber zwei Zeichen, die zusammen nur die echte Lagerform tragen:
+    er HEISST wie die Domain, und die manifest.json IN ihm NENNT
+    dieselbe. Der Ordner allein genuegt nicht -- Repokopien heissen
+    manchmal wie die Domain --, das Manifest allein auch nicht -- es
+    kann irgendwo als Vorlage liegen.
+
+    Genau ein Treffer liefert seinen Pfad als Praefix, das beim
+    Entpacken wegfaellt. Kein Treffer liefert ``None`` -- der Aufrufer
+    bleibt bei der hergebrachten Ableitung ueber den gemeinsamen
+    Oberordner. Mehrere Treffer sind Raterei und werden abgewiesen.
+    Und kuendigt das Archiv unter ``custom_components/`` eine
+    Integration an, die nicht zur gesuchten Domain passt, gibt es
+    Klartext statt stiller Fehlinstallation -- Home Assistant laedt
+    keine Integration aus einem Ordner, der nicht zur Domain gehoert.
+    """
+    treffer: list[str] = []
+    angekuendigt: set[str] = set()
+    for ordner, roh in _manifest_ordner(archiv):
+        befund = pruefe_manifest(roh)
+        genannt = str(json.loads(roh).get("domain") or "") if befund else ""
+        name = ordner.split("/")[-1]
+        if genannt == domain and name == domain:
+            treffer.append(ordner)
+            continue
+        if "custom_components" in ordner.split("/"):
+            angekuendigt.add(name or "?")
+    if len(treffer) > 1:
+        raise InstallationsFehler(
+            f"die Integration {domain!r} liegt mehrfach im Archiv: "
+            + ", ".join(sorted(treffer))
+        )
+    if treffer:
+        return treffer[0]
+    if angekuendigt:
+        raise InstallationsFehler(
+            "im Archiv kuendigt custom_components/"
+            + ", ".join(sorted(angekuendigt))
+            + "/ eine Integration an, die nicht zur Domain "
+            + f"{domain!r} passt -- Ordnername und manifest.json muessen "
+            "dasselbe sagen"
+        )
+    return None
+
+
 def _domain_aus_manifest(archiv: bytes) -> str:
     roh = lese_archiv_datei(archiv, _MANIFEST)
     if roh is None:
         raise InstallationsFehler(
-            "im Archiv fehlt die manifest.json -- ohne sie kennt Home "
-            "Assistant keine Integration"
+            "die manifest.json fehlt im Archiv oder liegt mehrfach -- ohne "
+            "sie kennt Home Assistant keine Integration"
         )
     befund = pruefe_manifest(roh)
     if not befund:
@@ -178,8 +266,22 @@ def _installiere_sync(
                 f"hacs.json ist kein gueltiges JSON: {fehlschlag}"
             ) from fehlschlag
 
+    # Befund #15, Entschluss b: schweigt die hacs.json ueber die
+    # Lagerform, kann das Archiv sie selbst zeigen -- der Ordner
+    # custom_components/<domain>/ in jeder Tiefe. Nur bei Integrationen:
+    # nur sie haben eine Domain und damit eine Lagerform. Was die
+    # hacs.json ausdruecklich sagt (filename, content_in_root,
+    # zip_release), bleibt vorrangig.
     try:
         schnitt = zielpfade.ausschnitt(hacs_daten)
+        if (
+            kategorie == "integration"
+            and schnitt.art == "unterordner"
+            and not schnitt.unterordner
+        ):
+            lagerform = finde_lagerform(archiv, zielname)
+            if lagerform is not None:
+                schnitt = zielpfade.Ausschnitt(art="unterordner", unterordner=lagerform)
         zuordnung = zielpfade.waehle_eintraege(schnitt, namen)
     except zielpfade.ZielpfadFehler as fehlschlag:
         raise InstallationsFehler(str(fehlschlag)) from fehlschlag
