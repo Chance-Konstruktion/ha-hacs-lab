@@ -86,7 +86,10 @@ by hand. It takes about two minutes.
   directory first, then an atomic switch, rolled back on failure.
 - **Preferred source:** if a release carries exactly one ZIP attachment,
   that built artifact is installed instead of the auto-generated tag
-  archive; anything ambiguous falls back to the archive.
+  archive; anything ambiguous falls back to the archive. That fallback
+  understands the repository layout: it finds `custom_components/<domain>/`
+  at any depth and installs only that subtree — so the standard HACS
+  structure installs as-is, without a built attachment (issue #15).
 - **Uninstall & restart:** every entry with a recorded install also
   uninstalls — the recorded target path is checked against the known
   category roots, then removed in one move. Installing or uninstalling
@@ -115,7 +118,12 @@ To make a GitLab project findable and installable by HACS*lab:
    Repositories with a different layout set `content_in_root`,
    `zip_release`, or `filename` — the same conventions HACS established.
 3. Publish versions as releases, or at least as tags. Releases win; tags
-   are the fallback.
+   are the fallback. No built artifact required: the auto-generated tag
+   archive is enough — HACS*lab recognises the `custom_components/<domain>/`
+   folder inside it and installs exactly that subtree, leaving repository
+   root files (README, CI config) out of the target. A release with a
+   built ZIP attachment (the domain folder as its root) stays the most
+   precise delivery and still wins when present.
 
 `hacs-development` as a second topic marks a repository as a development
 state — it is only found when explicitly searched for.
