@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from auslieferung.release_bauen import ANZEIGENAME, fingerabdruck
+from auslieferung.release_bauen import ANZEIGENAME, fingerabdruck, lies_version
 from auslieferung.verkuendigen import (
     ERFORDERLICH,
     VerkuendigungsFehler,
@@ -33,6 +33,13 @@ from auslieferung.verkuendigen import (
 
 #: Die Wurzel des ausgecheckten Standes -- zwei Ebenen ueber diesem Test.
 WURZEL = Path(__file__).resolve().parents[1]
+
+#: Version und Tag des ausgecheckten Standes -- aus der manifest.json
+#: gelesen, nie von Hand gepflegt. Diese Pruefungen laufen bei JEDEM
+#: Release-Schnitt weiter (Befund Flug 2082: die hartcodierte Version
+#: brach die Bahn bei jedem Bump und verdaechtigte den Schnitt).
+VERSION = lies_version(WURZEL)
+TAG = f"v{VERSION}"
 
 
 class Attrappe:
@@ -58,19 +65,23 @@ class Attrappe:
         return 201, b"{}"
 
 
-def umgebung(tag: str = "v0.1.1") -> dict[str, str]:
-    """Eine CI-Umgebung, wie sie der Job vorfindet -- ohne echte Adresse."""
+def umgebung(tag: str | None = None) -> dict[str, str]:
+    """Eine CI-Umgebung, wie sie der Job vorfindet -- ohne echte Adresse.
+
+    Ohne Angabe passt der Tag zum ausgecheckten Stand -- der Normalfall:
+    CI haengt den Tag an den Lauf, der aus genau diesem Stand gebaut ist.
+    """
     return {
         "CI_API_V4_URL": "https://gitlab.example.test/api/v4",
         "CI_PROJECT_ID": "42",
         "CI_JOB_TOKEN": "job-token-dieses-laufs",
-        "CI_COMMIT_TAG": tag,
+        "CI_COMMIT_TAG": tag or TAG,
     }
 
 
 @pytest.fixture
 def zip_pfad(tmp_path: Path) -> Path:
-    pfad = tmp_path / f"{ANZEIGENAME}-v0.1.1.zip"
+    pfad = tmp_path / f"{ANZEIGENAME}-{TAG}.zip"
     pfad.write_bytes(b"zip-inhalt, zwei Bauten gleich")
     return pfad
 
@@ -89,7 +100,7 @@ class TestHerangang:
         assert put["methode"] == "PUT"
         assert put["url"] == (
             "https://gitlab.example.test/api/v4/projects/42"
-            f"/packages/generic/{ANZEIGENAME}/0.1.1/{ANZEIGENAME}-v0.1.1.zip"
+            f"/packages/generic/{ANZEIGENAME}/{VERSION}/{ANZEIGENAME}-{TAG}.zip"
         )
         assert put["token"] == "job-token-dieses-laufs"
         assert put["inhalt"] == b"zip-inhalt, zwei Bauten gleich"
@@ -99,11 +110,11 @@ class TestHerangang:
         assert post["url"] == "https://gitlab.example.test/api/v4/projects/42/releases"
         assert post["inhaltstyp"] == "application/json"
         eintrag = json.loads(post["inhalt"])
-        assert eintrag["tag_name"] == "v0.1.1"
-        assert eintrag["name"] == "HACS*lab v0.1.1"
+        assert eintrag["tag_name"] == TAG
+        assert eintrag["name"] == f"HACS*lab {TAG}"
         assert fingerabdruck(zip_pfad) in eintrag["description"]
         (link,) = eintrag["assets"]["links"]
-        assert link["name"] == f"{ANZEIGENAME}-v0.1.1.zip -- Hand-Installation"
+        assert link["name"] == f"{ANZEIGENAME}-{TAG}.zip -- Hand-Installation"
         assert link["url"] == put["url"]
 
         assert protokoll["paket"] == put["url"]
@@ -121,7 +132,7 @@ class TestHerangang:
     def test_v_wird_vor_der_version_entfernt(self, zip_pfad: Path):
         attrappe = Attrappe()
         verkuendigen(WURZEL, zip_pfad, umgebung(), transport=attrappe)
-        assert "/0.1.1/" in attrappe.aufrufe[0]["url"]
+        assert f"/{VERSION}/" in attrappe.aufrufe[0]["url"]
 
 
 # ------------------------------------------------- Was der Fehlerfall sagt
@@ -147,8 +158,9 @@ class TestFehlerfaelle:
 
     def test_tag_widerspricht_der_manifest_version(self, zip_pfad: Path):
         attrappe = Attrappe()
+        falsch = "v9.9.9" if VERSION != "9.9.9" else "v8.8.8"
         with pytest.raises(VerkuendigungsFehler) as befund:
-            verkuendigen(WURZEL, zip_pfad, umgebung(tag="v9.9.9"), transport=attrappe)
+            verkuendigen(WURZEL, zip_pfad, umgebung(tag=falsch), transport=attrappe)
         assert "manifest.json" in str(befund.value)
         assert attrappe.aufrufe == []
 
@@ -184,9 +196,9 @@ class TestKommandozeile:
         attrappe = Attrappe()
         assert haupt([str(zip_pfad)], env=umgebung(), transport=attrappe) == 0
         ausgabe = capsys.readouterr().out
-        assert f"/packages/generic/{ANZEIGENAME}/0.1.1/" in ausgabe
+        assert f"/packages/generic/{ANZEIGENAME}/{VERSION}/" in ausgabe
         assert "SHA-256" in ausgabe
-        assert "HACS*lab v0.1.1" in ausgabe
+        assert f"HACS*lab {TAG}" in ausgabe
         assert len(attrappe.aufrufe) == 2
 
     def test_haupt_ohne_alles(self):

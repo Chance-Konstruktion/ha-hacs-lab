@@ -204,21 +204,31 @@ class TestDeterminismus:
 
 class TestVersion:
     def test_version_aus_manifest(self):
-        assert lies_version(WURZEL) == "0.1.1"
+        """lies_version nennt exakt, was in der manifest.json steht."""
+        roh = json.loads(
+            (WURZEL / "custom_components" / "hacs_lab" / "manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert lies_version(WURZEL) == roh["version"]
 
     def test_name_traegt_version(self, tmp_path: Path):
         ziel = baue_release(WURZEL, tmp_path)
-        assert ziel.name == "hacs-lab-v0.1.1.zip"
+        assert ziel.name == f"hacs-lab-v{lies_version(WURZEL)}.zip"
 
     def test_tag_wird_normalisiert(self, tmp_path: Path):
-        ziel = baue_release(WURZEL, tmp_path, version="v0.1.1")
-        assert ziel.name == "hacs-lab-v0.1.1.zip"
+        ziel = baue_release(WURZEL, tmp_path, version=f"v{lies_version(WURZEL)}")
+        assert ziel.name == f"hacs-lab-v{lies_version(WURZEL)}.zip"
 
     def test_abweichende_version_wird_verweigert(self, tmp_path: Path):
-        """Tag und manifest.json muessen dasselbe sagen. Ein Release, der im
-        Namen v0.9.0 verspricht und als 0.1.1 installiert, ist eine Falle."""
-        with pytest.raises(BauFehler, match="0.9.0.*0.1.1|0.1.1.*0.9.0"):
-            baue_release(WURZEL, tmp_path, version="v0.9.0")
+        """Tag und manifest.json muessen dasselbe sagen. Ein Release, der
+        im Namen etwas anderes verspricht als er installiert, ist eine
+        Falle. Die abweichende Version wird so gewaehlt, dass sie dem
+        ausgecheckten Stand IMMER widerspricht -- egal, wie der heisst."""
+        wahr = lies_version(WURZEL)
+        falsch = "v9.9.9" if wahr != "9.9.9" else "v8.8.8"
+        with pytest.raises(BauFehler, match=f"{falsch[1:]}.*{wahr}|{wahr}.*{falsch[1:]}"):
+            baue_release(WURZEL, tmp_path, version=falsch)
 
 
 # ------------------------------------------------- Klartext-Fehler
@@ -262,9 +272,9 @@ class TestFehler:
 
 class TestKommandozeile:
     def test_baut_in_zielverzeichnis(self, tmp_path: Path, capsys):
-        ergebnis = haupt(["--version", "v0.1.1", str(tmp_path)])
+        ergebnis = haupt(["--version", f"v{lies_version(WURZEL)}", str(tmp_path)])
         assert ergebnis == 0
-        assert (tmp_path / "hacs-lab-v0.1.1.zip").is_file()
+        assert (tmp_path / f"hacs-lab-v{lies_version(WURZEL)}.zip").is_file()
         ausgabe = capsys.readouterr().out
         assert "SHA-256" in ausgabe
         assert "Dateien" in ausgabe

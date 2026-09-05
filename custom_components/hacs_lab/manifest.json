@@ -1,7 +1,7 @@
 {
   "domain": "hacs_lab",
   "name": "HACS*lab",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "documentation": "https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab",
   "issue_tracker": "https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/issues",
   "codeowners": [
