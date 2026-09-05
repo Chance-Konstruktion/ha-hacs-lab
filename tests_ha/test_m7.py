@@ -32,6 +32,13 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.hacs_lab.const import CONF_HOST, CONF_TOKEN, DOMAIN
 from tests.attrappe import Aufzeichnung
 
+from .test_m5 import (
+    eintrag_daten,
+    release_objekt,
+    speichern,
+    stammdaten,
+)
+
 HOST = "gitlab.example.net"
 STORAGE_KEY = "gitlab@gitlab.example.net:789012"
 
@@ -143,7 +150,7 @@ async def test_panel_ist_ohne_yaml_angemeldet(
     assert "hacs-lab" in karten
     karte = karten["hacs-lab"]
     assert karte.sidebar_title == "HACS*lab"
-    assert karte.sidebar_icon == "mdi:hexagon-multiple"
+    assert karte.sidebar_icon == "hacs-lab:tanuki"
     assert karte.require_admin is True
     angepasst = karte.config["_panel_custom"]
     assert angepasst["name"] == "hacs-lab-panel"
@@ -157,6 +164,152 @@ async def test_panel_ist_ohne_yaml_angemeldet(
     assert "hacs-lab-panel" in koerper
     # Die Sprachen, die das Panel kennt, stehen in der Datei selbst.
     assert '"de"' in koerper or "de:" in koerper
+
+    # Flug 2083: der Laden traegt GitLabs Tracht -- der Tanuki im Balken
+    # (vier farbige Pfade), der Rueckhalt fuer die Seitenleiste, die
+    # einklappbaren Abschnitte und das Erneuern beim Betreten.
+    assert "#E24329" in koerper
+    assert "#FC6D26" in koerper
+    assert "customIconsets" in koerper
+    assert "hacs_lab/erneuern" in koerper
+    for schlussel in ("aktualisierbar", "installierbar", "neu", "downloadbar"):
+        assert schlussel in koerper
+
+    # Das Iconset wird neben der Panel-Datei eigenen Weg geliefert.
+    antwort = await client.get("/hacs_lab/iconset.js")
+    assert antwort.status == 200
+    iconset = await antwort.text()
+    assert "customIconsets" in iconset
+    assert '"hacs-lab"' in iconset
+    assert "#E24329" not in iconset  # die Silhouette traegt keine Farbe
+
+
+async def test_iconset_haengt_an_jeder_seite(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_ws_client
+) -> None:
+    """Die Seitenleiste kennt den Tanuki, bevor jemand das Panel oeffnet.
+
+    add_extra_js_url haengt das Iconset an das Grundgeruest des Frontends
+    -- dieselbe Stelle, deren sich HACS fuer sein eigenes Zeichen bedient.
+    Das Testhaus richtet das Frontend hier von Hand (wie das Hochfahren
+    es ohnehin vor den Custom-Integrationen tut).
+    """
+    assert await async_setup_component(hass, "frontend", {})
+    sitzung_einpflanzen([herzschlag()])
+    await richten(hass, mock_eintrag())
+
+    urls = hass.data[frontend.DATA_EXTRA_MODULE_URL].urls
+    assert "/hacs_lab/iconset.js" in urls
+
+
+async def test_erneuern_auf_leerer_instanz(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
+) -> None:
+    """Leere Liste: der Befehl legt den ersten Aktualisierer an, ruft aber nichts.
+
+    Instanzen ohne Eintraege hatten nie eine update-Entity -- also auch
+    keinen Aktualisierer. ``erneuern`` legt ihn idempotent an; der Lauf
+    ueber eine leere Liste fragt keine Aufzeichnung.
+    """
+    hass_storage["hacs_lab." + HOST.replace(".", "_")] = {
+        "version": 1,
+        "data": {"eintraege": [], "stand": {}},
+    }
+    attrappe = sitzung_einpflanzen([herzschlag()])
+    await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
+    antwort = await frage(client, 1, "hacs_lab/erneuern")
+    assert antwort["success"]
+    assert antwort["result"]["eintraege"] == []
+    assert antwort["result"]["gescheitert"] == {}
+    # Kein einziger Ruf ging ueber die Reihe hinaus -- der Lauf war leer.
+    assert len(attrappe.abrufe) == 1  # der Herzschlag beim Richten
+
+
+async def test_erneuern_liefert_den_frischen_fund(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
+) -> None:
+    """Der Betritt frischt auf: neuer Release, ohne auf den Takt zu warten.
+
+    Die Liste haengt sonst am Takt des Aktualisierers -- Minuten oder
+    Stunden. ``erneuern`` dreht jeden herum: der Fund aus dem frischen
+    Lauf ist sofort da, und die scheiternde Instanz steht in der Antwort.
+    """
+    speichern(
+        hass_storage,
+        [eintrag_daten()],
+        stand={STORAGE_KEY: {"installiert": "1.1.0", "vorabversionen": False}},
+    )
+    attrappe = sitzung_einpflanzen(
+        [
+            herzschlag(),  # Herzschlag beim Richten
+            stammdaten(),  # M8-2: Stammdaten zum ersten Lauf ueber die ID
+            releases(release_objekt("v1.2.0")),  # erster Lauf: 1.2.0 ist oben
+            stammdaten(),  # Liste zeigen (eintraege) -- noch der alte Fund
+            stammdaten(),  # erneuern: Stammdaten ueber die ID
+            releases(release_objekt("v1.3.0", "Frisch")),  # erneuern: neuer Release
+            stammdaten(),  # erneuern: die Liste danach bauen
+        ]
+    )
+    await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
+    # Vorher: die Liste sagt 1.2.0 -- der Takt hat noch nicht geschlagen.
+    antwort = await frage(client, 1, "hacs_lab/eintraege")
+    assert antwort["result"]["eintraege"][0]["neueste"] == "1.2.0"
+
+    # Der Betritt: frischer Lauf, neuer Fund sofort.
+    antwort = await frage(client, 2, "hacs_lab/erneuern")
+    assert antwort["success"]
+    zeile = antwort["result"]["eintraege"][0]
+    assert zeile["neueste"] == "1.3.0"
+    assert zeile["installiert"] == "1.1.0"
+    assert antwort["result"]["gescheitert"] == {}
+
+    # Die update-Entity hat den frischen Fund auch schon uebernommen.
+    ids = hass.states.async_entity_ids("update")
+    frisch = hass.states.get(ids[0])
+    assert frisch.attributes["latest_version"] == "1.3.0"
+    assert frisch.state == "on"
+    assert len(attrappe.abrufe) == 7  # alle Aufzeichnungen, keine mehr, keine weniger
+
+
+async def test_erneuern_meldet_die_gescheiterte_instanz(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
+) -> None:
+    """Scheitert der frische Lauf, kommt die Liste trotzdem -- mit Grund.
+
+    Die Antwort reisst nicht um: der letzte erfolgreiche Fund bleibt
+    stehen, die Instanz steht mit Klartext in ``gescheitert``.
+    """
+    speichern(
+        hass_storage,
+        [eintrag_daten()],
+        stand={STORAGE_KEY: {"installiert": "1.1.0", "vorabversionen": False}},
+    )
+    sitzung_einpflanzen(
+        [
+            herzschlag(),  # Herzschlag beim Richten
+            stammdaten(),  # M8-2: Stammdaten zum ersten Lauf ueber die ID
+            releases(release_objekt("v1.2.0")),  # erster Lauf
+            stammdaten(),  # erneuern: Stammdaten ueber die ID
+            Aufzeichnung(  # erneuern: der Lauf scheitert an der Instanz
+                status=500, text='{"message": "overloaded"}', kopfzeilen={}
+            ),
+            stammdaten(),  # erneuern: die Liste danach bauen
+        ]
+    )
+    await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
+    antwort = await frage(client, 1, "hacs_lab/erneuern")
+    assert antwort["success"]
+    assert HOST in antwort["result"]["gescheitert"]
+    assert "500" in antwort["result"]["gescheitert"][HOST]
+    # Der letzte erfolgreiche Fund bleibt -- die Liste kam trotzdem.
+    zeile = antwort["result"]["eintraege"][0]
+    assert zeile["neueste"] == "1.2.0"
 
 
 async def test_eintraege_nennt_instanzen_und_kategorien(

@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.panel_custom import async_register_panel
 from homeassistant.core import HomeAssistant
@@ -29,6 +30,10 @@ _LOGGER = logging.getLogger(__name__)
 
 #: Der Weg, unter dem der Browser die Panel-Datei bekommt.
 PANEL_URL = "/hacs_lab/panel.js"
+
+#: Der Weg zum Iconset -- jede Seite des Frontends laedt es, denn die
+#: Seitenleiste zeichnet ihr Zeichen schon bevor das Panel offen ist.
+ICONSET_URL = "/hacs_lab/iconset.js"
 
 #: Der Name des Web-Components -- muss zur Definition in panel.js passen.
 PANEL_ELEMENT = "hacs-lab-panel"
@@ -39,8 +44,10 @@ PANEL_PFAD = "hacs-lab"
 #: Wie das Panel in der Sidebar heisst -- ein Name, kein uebersetzbarer Satz.
 PANEL_TITEL = "HACS*lab"
 
-#: Waben-Piktogramm -- der Bienen-Welt des Stocks geschuldet.
-PANEL_ICON = "mdi:hexagon-multiple"
+#: Der Tanuki von GitLab -- monochrom, aus ``iconset.js``. Das Zeichen
+#: lebt in der eigenen Kollektion ``hacs-lab``, nicht in MDI: das
+#: Markenbild gehoert dem Imker-Server, dem die Integration dient.
+PANEL_ICON = "hacs-lab:tanuki"
 
 
 async def richten(hass: HomeAssistant) -> None:
@@ -51,10 +58,25 @@ async def richten(hass: HomeAssistant) -> None:
     Instanz-Eintraege (die Liste kann dann leer sein, das Panel
     bleibt ehrlich und zeigt das).
     """
-    datei = Path(__file__).parent / "frontend" / "panel.js"
+    ordner = Path(__file__).parent / "frontend"
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(PANEL_URL, str(datei), cache_headers=False)]
+        [
+            StaticPathConfig(PANEL_URL, str(ordner / "panel.js"), cache_headers=False),
+            StaticPathConfig(
+                ICONSET_URL, str(ordner / "iconset.js"), cache_headers=False
+            ),
+        ]
     )
+    # Das Iconset auf jede Seite: die Seitenleiste fragt ihr Zeichen frueher,
+    # als jemand das Panel betreten koennte. add_extra_js_url haengt es an
+    # das Grundgeruest des Frontends (dieselbe Oeffentlichkeit, deren sich
+    # HACS fuer sein eigenes Zeichen bedient). Steht das Grundgeruest noch
+    # nicht (Testhaus ohne Frontend), bleibt es beim Rueckhalt in panel.js
+    # -- das Zeichen darf den Laden nie umwerfen.
+    try:
+        add_extra_js_url(hass, ICONSET_URL)
+    except KeyError:  # Frontend noch nicht gerichtet -- siehe oben
+        _LOGGER.debug("Iconset wartet: das Frontend ist noch nicht gerichtet")
     await async_register_panel(
         hass,
         frontend_url_path=PANEL_PFAD,
