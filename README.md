@@ -55,21 +55,31 @@ by hand. It takes about two minutes.
    own entries.
 5. After setup you get a sidebar panel — no YAML anywhere.
 
-> The setup dialog currently speaks German; English UI strings are on the
-> roadmap. The panel itself already carries both languages.
+> The setup dialog and the panel speak German and English — Home
+> Assistant picks the language, the integration ships both
+> (`translations/de.json`, `translations/en.json`).
 
 > **Upgrading from v0.1.0?** That archive shipped an import layout that
 > breaks the setup dialog with `No module named 'hacs_lab'` — the config
 > flow reached for a top-level package that Home Assistant never
 > provides. Remove **both** leftovers from your configuration directory
 > first: `custom_components/hacs_lab/` **and** the stray top-level
-> `hacs_lab/` folder the old archive dropped next to it. Then extract the
-> v0.1.1 archive (one folder, core included) and restart. Since v0.1.1
+> `hacs_lab/` folder the old archive dropped next to it. Then extract a
+> current archive (one folder, core included) and restart. Since v0.1.1
 > the integration also carries an icon in the settings page
-> (`mdi:gitlab`); `icon.svg` in this repository is the brand artwork —
-> the demonic GitLab fox taking over the Home Assistant house: HA blue,
-> a white home, and a tanuki in ember colors with burning GitLab seams
-> whose claws dig into the facade.
+> (`mdi:gitlab`); `logo.png` and `original.png` in this repository are
+> the brand artwork — the demonic GitLab fox taking over the Home
+> Assistant house: HA blue, a white home, and a tanuki in ember colors
+> with burning GitLab seams whose claws dig into the facade.
+
+> **Upgrading from v0.1.1?** Extract the v0.2.0 archive over the old
+> folder and restart — same layout, nothing to clean up. What's new:
+> a repository in the plain HACS layout (`custom_components/<domain>/`
+> nested anywhere in its tag source archive) now installs **without a
+> prebuilt attachment** — HACS*lab finds the storage form itself
+> (issue #15) — and HACS*lab now accepts its own delivery form, so it
+> can keep itself up to date: add this repository to its own watch
+> list and the next release offers itself as an update.
 
 ## Using HACS*lab
 
@@ -141,7 +151,7 @@ atomically, rolled back on failure.
 ## Repository layout
 
 ```
-icon.svg                      project icon — demonic GitLab fox clawing into the HA house
+logo.png, original.png        brand artwork — the GitLab fox in the HA house
 hacs.json                     repository conventions for HACS*lab itself
 custom_components/hacs_lab/   the integration — thin Home Assistant layer
   manifest.json               domain, version, config flow, icon
