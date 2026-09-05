@@ -121,7 +121,9 @@ async def _liste(hass: HomeAssistant) -> dict[str, Any]:
     zeilen: list[dict[str, Any]] = []
     funde: list[dict[str, Any]] = []
     staende_am: dict[str, str] = {}
+    anbieter: dict[str, str] = {}
     for host, laufzeit in sorted(_laufzeiten(hass).items()):
+        anbieter[host] = laufzeit.forge.provider
         lager = getattr(laufzeit, "lager", None)
         if lager is None:
             continue
@@ -136,6 +138,7 @@ async def _liste(hass: HomeAssistant) -> dict[str, Any]:
         "eintraege": zeilen,
         "funde": funde,
         "instanzen": sorted(_laufzeiten(hass)),
+        "anbieter": anbieter,
         "kategorien": list(KATEGORIEN),
         "aktualisiert_am": staende_am,
     }

@@ -2,10 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "HACS*lab mit einer GitLab-Instanz verbinden",
-        "description": "Adresse der GitLab-Instanz. Der Host genuegt; ein eingefuegter Link wird darauf gekuerzt. Oeffentliche Instanzen wie gitlab.com kommen ohne Token aus, eigene brauchen meist eins mit Leserecht.",
+        "title": "HACS*lab mit einer Instanz verbinden",
+        "description": "Adresse der Instanz und ihr Anbieter. „auto“ fragt die Instanz selbst ab (zwei, drei kleine Anfragen) und passt auf gitlab.com, codeberg.org, gitea.com und eigene Server gleichermaßen; einen genannten Anbieter wählt man, wenn die Erkennung nicht entscheiden kann. Der Host genügt; ein eingefügter Link wird darauf gekürzt. Öffentliche Instanzen kommen ohne Token aus, eigene brauchen meist eins mit Leserecht.",
         "data": {
-          "host": "Host der GitLab-Instanz",
+          "host": "Host der Instanz",
+          "provider": "Anbieter (auto = erkennen)",
           "token": "Zugangs-Token mit Leserecht (optional)"
         }
       }
@@ -14,13 +15,15 @@
       "token_reicht_nicht": "Token fehlt oder reicht nicht — {grund}",
       "verbindung_fehlgeschlagen": "Verbindung fehlgeschlagen — {grund}",
       "host_nicht_erreichbar": "Instanz nicht erreichbar — {grund}",
-      "host_leer": "Bitte einen Host angeben"
+      "host_leer": "Bitte einen Host angeben",
+      "anbieter_unerkannt": "Dort antwortet weder GitLab noch Gitea/Forgejo — den Anbieter von Hand wählen — {grund}",
+      "anbieter_unbekannt": "Diesen Anbieter gibt es nicht"
     },
     "abort": {
       "already_configured": "Diese Instanz ist bereits eingerichtet"
     },
     "create_entry": {
-      "verbunden": "Mit {host} verbunden — {anzahl} Projekte tragen das Topic hacs"
+      "verbunden": "Mit {host} verbunden ({anbieter}) — {anzahl} Projekte tragen das Topic hacs"
     }
   },
   "options": {

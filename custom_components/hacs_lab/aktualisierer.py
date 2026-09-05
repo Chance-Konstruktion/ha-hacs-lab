@@ -46,7 +46,7 @@ from .stand import Staende
 
 if TYPE_CHECKING:
     from . import Laufzeit
-    from .core.gitlab_forge import GitLabForge
+    from .core.forge import Forge
     from .eintraege import Eintraege, Eintrag
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ class HacsLabAktualisierer(DataUpdateCoordinator[dict[str, Fund]]):
         self,
         hass: HomeAssistant,
         eintrag: ConfigEntry,
-        forge: GitLabForge,
+        forge: Forge,
         eintraege: Eintraege,
         staende: Staende,
     ) -> None:

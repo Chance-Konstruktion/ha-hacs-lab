@@ -83,6 +83,14 @@ class ForgejoForge:
 
     provider = FORGEJO
 
+    #: Schaltet, ob die Stichwortsuche den Parameter ``topic=true``
+    #: mitschickt. Gitea (die Schwester, Flug 2088) ehrt ihn und setzt
+    #: ihn; Forgejo ignoriert ihn -- gemessen an codeberg.org, der
+    #: Referenzinstanz -- und laesst ihn weg. Die exakte Filterung auf
+    #: ``topics`` geschieht in beiden Faellen client-seitig; der
+    #: Parameter verschaerft nur die Treffermenge, wo er wirkt.
+    SUCHE_MIT_TOPIC_PARAMETER = False
+
     def __init__(self, http: HttpClient, host: str) -> None:
         self.http = http
         self.host = host.rstrip("/").removeprefix("https://").removeprefix("http://")
@@ -237,9 +245,15 @@ class ForgejoForge:
                 )
             kandidaten = roh if isinstance(roh, list) else []
         else:
+            suchparameter = {"q": topic, "limit": str(menge)}
+            if self.SUCHE_MIT_TOPIC_PARAMETER:
+                # Gitea ehrt den Parameter; Forgejo ignoriert ihn. Wo er
+                # wirkt, sucht die Instanz Themen statt Namen -- die
+                # exakte Filterung unten bleibt trotzdem scharf.
+                suchparameter["topic"] = "true"
             antwort = await self._json(
                 self.api + "/repos/search",
-                {"q": topic, "limit": str(menge)},
+                suchparameter,
                 seiten=nur_eine,
             )
             if isinstance(antwort, dict):

@@ -43,15 +43,17 @@ from .const import (
     ABLAGE_VERSION,
     CONF_ABSTAND_MINUTEN,
     CONF_HOST,
+    CONF_PROVIDER,
     CONF_TOKEN,
     DOMAIN,
     LAGER_START_VERZOEGERUNG_SEK,
     STANDARD_ABSTAND_MINUTEN,
     ablage_schluessel,
 )
-from .core.forge import ForgeFehler
-from .core.gitlab_forge import GitLabForge
+from .core.forge import Forge, ForgeFehler
 from .core.http_aiohttp import AiohttpClient
+from .core.identity import GITLAB
+from .core.schmiede import schmiede
 from .eintraege import Eintraege
 from .frontend import richten as oberflaeche_richten
 from .lager import Lager
@@ -102,9 +104,7 @@ class HacsLabKoordinator(DataUpdateCoordinator[dict[str, int | str]]):
     Update-Laeufe.
     """
 
-    def __init__(
-        self, hass: HomeAssistant, eintrag: ConfigEntry, forge: GitLabForge
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, eintrag: ConfigEntry, forge: Forge) -> None:
         minuten = int(
             eintrag.options.get(CONF_ABSTAND_MINUTEN) or STANDARD_ABSTAND_MINUTEN
         )
@@ -144,7 +144,7 @@ class Laufzeit:
     ``aktualisierer``, bis M0.5 die Form der Laufzeit geklaert hat.
     """
 
-    forge: GitLabForge
+    forge: Forge
     koordinator: HacsLabKoordinator
     ablage: Ablage
     eintraege: Eintraege
@@ -186,7 +186,13 @@ async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
     """
     sitzung = async_get_clientsession(hass)
     klient = AiohttpClient(sitzung, eintrag.data.get(CONF_TOKEN) or None)
-    forge = GitLabForge(klient, eintrag.data[CONF_HOST])
+    # Die Schmiede formt den Forge nach dem Namen im Eintrag (Flug
+    # 2088). Eintraege aus der Zeit davor tragen keinen -- dann gilt
+    # GitLab, die einzige Schmiedung, die es damals gab; das Verhalten
+    # dieser Eintraege bleibt Stueck fuer Stueck dasselbe.
+    forge = schmiede(
+        klient, eintrag.data[CONF_HOST], eintrag.data.get(CONF_PROVIDER) or GITLAB
+    )
 
     ablage = Ablage(
         Store(hass, ABLAGE_VERSION, ablage_schluessel(eintrag.data[CONF_HOST]))

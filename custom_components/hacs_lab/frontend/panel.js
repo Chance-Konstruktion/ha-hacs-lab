@@ -52,8 +52,22 @@
  * * der leere Laden (erste Einrichtung) schickt mit einem Knopf
  *   direkt in denselben Dialog -- kein Suchen in den Einstellungen.
  *
+ * Flug 2088 stellt drei Schmieden in denselben Laden:
+ *
+ * * das Warten sieht aus wie Home Assistant: solange noch nichts
+ *   da ist (erster Betritt, erste Detailfahrt), steht eine Karte
+ *   mit dem Rundblitz des Hauses in seiner Farbe mittig im Raum --
+ *   nicht GitLabs Leiste, sondern die Ladesprache der Umgebung.
+ * * die Instanz-Plaettchen nennen ihren Anbieter (GitLab, Forgejo,
+ *   Gitea) -- die Karte reist als "anbieter" mit der Liste; welche
+ *   Schmiede einen Eintrag geformt hat, entscheidet der Server
+ *   (core/schmiede.py), hier steht nur das Wort daneben.
+ * * das Suffix-Fallback kennt gitea: foo/bar*gitea zaehlt zu seinen
+ *   Buchstaben wie *lab und *forge.
+ *
  * Zwei Sprachen, im File selbst: Deutsch und Englisch, gewaehlt nach
- * der Sprache der Bedienung. Der Kennzeichnungs-Suffix (*lab, *forge)
+ * der Sprache der Bedienung. Der Kennzeichnungs-Suffix (*lab, *forge,
+ * *gitea)
  * kommt fertig vom Server -- hier wird nichts doppelt gewusst.
  *
  * Sicherheit: Der Markdown-Renderer flieht zuerst JEDES Zeichen und
@@ -135,6 +149,9 @@ const TEXTE = {
     },
     scan_laeuft: "Suche läuft …",
     frisch_laeuft: "frischer Lauf …",
+    lade_titel: "Wird geladen …",
+    lade_text: "Der Bestand kommt aus dem Lager — einen Augenblick.",
+    detail_lade_text: "Stammdaten, Beschreibung und Releases werden geholt.",
     instanzen_titel: "Instanzen",
     instanz_hinzufuegen: "Instanz hinzufügen",
     erste_instanz: "Erste Instanz einrichten",
@@ -213,6 +230,9 @@ const TEXTE = {
     },
     scan_laeuft: "Scanning …",
     frisch_laeuft: "fresh run …",
+    lade_titel: "Loading …",
+    lade_text: "The stock is on its way from the store cache — one moment.",
+    detail_lade_text: "Fetching metadata, description, and releases.",
     instanzen_titel: "Instances",
     instanz_hinzufuegen: "Add instance",
     erste_instanz: "Set up the first instance",
@@ -404,6 +424,28 @@ const KATEGORIEN = [
   "python_script",
 ];
 
+/** Die Marken der drei Schmieden -- Eigennamen, nicht übersetzbar. */
+const ANBIETER_NAMEN = {
+  gitlab: "GitLab",
+  forgejo: "Forgejo",
+  gitea: "Gitea",
+};
+
+/** Der Rundblitz -- die Warteskulptur des Hauses (Flug 2088).
+ *
+ * Derselbe Bogen, den ha-spinner zeichnet: ein Kreis, dem ein Stück
+ * fehlt, das sich dreht. Bewusst als eigenes SVG statt als ha-spinner:
+ * das Element gehört dem Haus und darf fehlen -- die eigene Zeichnung
+ * steht immer, und ihre Farben sind die der Tracht (var). */
+function dreher_svg(groesse_klasse) {
+  return (
+    `<svg class="${groesse_klasse}" viewBox="0 0 24 24" aria-hidden="true" ` +
+    `focusable="false"><circle cx="12" cy="12" r="9.5" fill="none" ` +
+    `stroke="currentColor" stroke-width="2.6" stroke-linecap="round" ` +
+    `stroke-dasharray="43 14"/></svg>`
+  );
+}
+
 /** Die Abschnitte des Ladens, in dieser Reihenfolge. */
 const ABSCHNITTE = ["aktualisierbar", "installiert", "neu", "downloadbar"];
 
@@ -522,6 +564,7 @@ class HacsLabPanel extends HTMLElement {
     this._sort = "name";
     this._eintraege = [];
     this._instanzen = [];
+    this._anbieter = {}; // host -> Schmiede-Name (GitLab/Forgejo/Gitea)
     this._funde_pro_host = {}; // host -> Funde (Lager oder eigene Suche)
     this._aktualisiert_am = {}; // host -> Zeitstempel des Lagers
     this._kategorien = KATEGORIEN;
@@ -533,6 +576,7 @@ class HacsLabPanel extends HTMLElement {
     this._fehler = "";
     this._instanz_fehler = {}; // host -> Grund (aus dem frischen Lauf)
     this._beschaeftigt = false;
+    this._laedt = true; // die erste Fahrt: noch nichts gesehen (Flug 2088)
     this._erneuert_am = 0;
     this._abmeldung = null; // Ereignis-Abo kuenndigen
     this._offen = {
@@ -657,6 +701,7 @@ class HacsLabPanel extends HTMLElement {
       this._fehler = this._fehlertext(fehler);
     }
     this._erneuert_am = Date.now();
+    this._laedt = false;
     this._beschaeftigt = false;
     this._zeichne();
   }
@@ -693,6 +738,9 @@ class HacsLabPanel extends HTMLElement {
     } catch (fehler) {
       this._fehler = this._fehlertext(fehler);
     }
+    // Die erste Fahrt ist vorbei: ob mit Bestand oder mit Fehler --
+    // ab hier ist die Ladeseite nicht mehr die ehrliche Antwort.
+    this._laedt = false;
     this._beschaeftigt = false;
     this._zeichne();
   }
@@ -701,6 +749,7 @@ class HacsLabPanel extends HTMLElement {
   _uebernehme(antwort) {
     this._eintraege = antwort.eintraege || [];
     this._instanzen = antwort.instanzen || [];
+    this._anbieter = antwort.anbieter || {};
     this._kategorien = antwort.kategorien || KATEGORIEN;
     this._funde_pro_host = {};
     for (const fund of antwort.funde || []) {
@@ -738,6 +787,9 @@ class HacsLabPanel extends HTMLElement {
 
   /** Detailansicht holen: Stammdaten, README, Releases. */
   async _hole_detail(host, pfad) {
+    // Erst das Geruest: der Name steht in den Brotkrumen, waehrend die
+    // Ladeseite (Flug 2088) den Rest heranholt.
+    this._detail = { host: host, pfad: pfad, daten: null };
     this._beschaeftigt = true;
     this._zeichne();
     try {
@@ -749,6 +801,9 @@ class HacsLabPanel extends HTMLElement {
       this._detail = { host: host, pfad: pfad, daten: daten };
       this._fehler = "";
     } catch (fehler) {
+      // Zurueck in den Laden mit der Meldung -- eine steckengebliebene
+      // Ladeseite waere die unehrlichere Antwort.
+      this._detail = null;
       this._fehler = this._fehlertext(fehler);
     }
     this._beschaeftigt = false;
@@ -931,7 +986,13 @@ class HacsLabPanel extends HTMLElement {
 
   _zeichne() {
     this._gerendert = true;
-    const inhalt = this._detail ? this._html_detail() : this._html_laden();
+    const inhalt = this._detail
+      ? this._detail.daten
+        ? this._html_detail()
+        : this._html_ladeseite(this._t.detail_lade_text)
+      : this._laedt && !this._instanzen.length && !this._eintraege.length
+        ? this._html_ladeseite(this._t.lade_text)
+        : this._html_laden();
     this.innerHTML = `
       <style>${STIL}</style>
       <div class="hl-panel">
@@ -942,6 +1003,27 @@ class HacsLabPanel extends HTMLElement {
         </div>
       </div>`;
     this._binden();
+  }
+
+  /** Die Ladeseite (Flug 2088) -- die Warteskulptur des Hauses.
+   *
+   * Der Rundblitz dreht sich in der Farbe der Tracht
+   * (``--primary-color``), die Karte traegt die Ecken und den Grund
+   * des Hauses (``--ha-card-*``). Solange noch kein Bestand da ist,
+   * ist DAS die ehrliche Flaeche -- keine leeren Abschnitte, kein
+   * Zappeln, sondern die Sprache, die Home Assistant auch spricht,
+   * wenn es selber laedt.
+   */
+  _html_ladeseite(text) {
+    const t = this._t;
+    return `
+      <div class="hl-ladeseite">
+        <div class="hl-ladekarte" role="status" aria-live="polite">
+          ${dreher_svg("hl-dreher")}
+          <div class="hl-lade-titel">${fliehe(t.lade_titel)}</div>
+          <div class="hl-lade-text">${fliehe(text || t.lade_text)}</div>
+        </div>
+      </div>`;
   }
 
   /** Der Balken oben -- GitLabs Leiste: Marke, Suche, Werkzeuge. */
@@ -1029,7 +1111,7 @@ class HacsLabPanel extends HTMLElement {
         ${this._instanzen
           .map(
             (h) =>
-              `<button class="hl-instanz" data-aktion="instanz" title="${fliehe(t.instanz_verwalten)}">${SERVER_SVG}<span>${fliehe(h)}</span></button>`
+              `<button class="hl-instanz" data-aktion="instanz" title="${fliehe(t.instanz_verwalten)}">${SERVER_SVG}<span>${fliehe(h)}</span>${this._html_anbieter(h)}</button>`
           )
           .join("")}
         <button class="hl-instanz hl-instanz-neu" data-aktion="instanz_hinzu" title="${fliehe(t.instanz_hinzufuegen)}">${PLUS_SVG}<span>${fliehe(t.instanz_hinzufuegen)}</span></button>
@@ -1098,7 +1180,7 @@ class HacsLabPanel extends HTMLElement {
   /** Das Zeichen einer Karte: Bild, oder farbiger Buchstabe (GitLab). */
   _avatar_html(zeile) {
     const name = String(zeile.name || zeile.full_name || "?").trim();
-    const bloss = name.replace(/[*](lab|forge)$/i, "");
+    const bloss = name.replace(/[*](lab|forge|gitea)$/i, "");
     const buchstabe = fliehe(
       (bloss.charAt(0) || "?").toUpperCase()
     );
@@ -1114,6 +1196,17 @@ class HacsLabPanel extends HTMLElement {
       `<span class="hl-avatar hl-avatar-buchstabe" style="background:${farbe};` +
       `color:${ZEICHEN_SCHRIFT}" aria-hidden="true">${buchstabe}</span>`
     );
+  }
+
+  /** Das Wort der Schmiede auf einem Plaettchen (Flug 2088).
+   *
+   * Die Karte "anbieter" reist mit der Liste; fehlt sie (alter
+   * Server, spaeterer Blick), bleibt das Plaettchen, wie es war --
+   * kein Wort ist besser als ein geratenes.
+   */
+  _html_anbieter(host) {
+    const name = ANBIETER_NAMEN[this._anbieter[host]];
+    return name ? `<span class="hl-anbieter">${fliehe(name)}</span>` : "";
   }
 
   _html_zeile_eintrag(e) {
@@ -1459,6 +1552,28 @@ const STIL = `
 .hl-instanz:hover svg { color: var(--hl-orange); }
 .hl-instanz-neu { border-style: dashed; }
 .hl-instanz-neu svg { width: 12px; height: 12px; }
+
+/* -- Das Wort der Schmiede auf dem Plaettchen (Flug 2088) */
+.hl-anbieter { font-size: 10.5px; font-weight: 600; line-height: 1.7;
+  color: var(--secondary-text-color); border: 1px solid rgba(127, 127, 127, .35);
+  border-radius: 999px; padding: 0 7px; flex: 0 0 auto; }
+
+/* -- Die Ladeseite (Flug 2088): Home Assistants eigene Wartesprache.
+   Der Rundblitz dreht in der Farbe der Tracht, die Karte traegt Ecken
+   und Grund des Hauses -- dieselben Variablen, die ha-card nutzt. */
+.hl-ladeseite { display: flex; justify-content: center; padding: 56px 0; }
+.hl-ladekarte { display: flex; flex-direction: column; align-items: center;
+  gap: 10px; min-width: 260px; max-width: 380px; padding: 30px 44px;
+  background: var(--card-background-color, #fff);
+  border: 1px solid var(--ha-card-border-color, rgba(127, 127, 127, .35));
+  border-radius: var(--ha-card-border-radius, 12px);
+  box-shadow: var(--ha-card-box-shadow, none); }
+.hl-dreher { width: 36px; height: 36px; color: var(--primary-color, #03a9f4);
+  animation: hl-drehen .9s linear infinite; }
+.hl-lade-titel { font-size: 15px; font-weight: 600;
+  color: var(--primary-text-color); }
+.hl-lade-text { font-size: 13px; color: var(--secondary-text-color);
+  text-align: center; line-height: 1.45; }
 .hl-werkzeug { display: flex; align-items: center; gap: 12px; padding: 4px 0 12px;
   flex-wrap: wrap; }
 .hl-sortierung { display: flex; align-items: center; gap: 8px;

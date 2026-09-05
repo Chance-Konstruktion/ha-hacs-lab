@@ -206,6 +206,13 @@ Diagnose.
 **Abnahme:** Codeberg-Repository laeuft durch denselben Ablauf;
 Aenderungen ausserhalb des neuen Anbieters bleiben klein und benannt.
 
+**Nachtrag Flug 2088:** der vierte Anbieter (`gitea_forge.py`, Tochter
+der Forgejo-Umsetzung) und die Schmiede (`schmiede.py`, Formung und
+Auto-Erkennung im Einrichtungsdialog) wiederholten den Beweis: Gitea
+brachte zwei Stueck Eigenes mit (Name und Such-Parameter), der Ablauf
+blieb unberuehrt. Der Eintrag fehlt absichtlich oben: er ist kein
+Meilenstein, sondern die Wiederholung eines bestandenen.
+
 ---
 
 ## M10 -- Nach draussen (erledigt)

@@ -1,8 +1,8 @@
 # HACS*lab
 
-HACS behaviour for GitLab repositories: add, discover, and update Home
-Assistant custom components that live on a GitLab instance — the way HACS
-does it for GitHub.
+HACS behaviour for self-hosted Git forges: add, discover, and update Home
+Assistant custom components that live on **GitLab**, **Gitea**, or **Forgejo**
+([Codeberg](https://codeberg.org)) — the way HACS does it for GitHub.
 
 **Not a fork.** HACS*lab is its own Home Assistant integration that runs
 *alongside* HACS. We change no HACS code and copy none. There is a reason:
@@ -13,13 +13,12 @@ use it.
 
 HACS knows exactly one source: GitHub. A custom repository with a GitLab
 address is rejected; there is no switch for it. If your integrations live on
-your own — or any other — GitLab instance, you install by hand and never
-learn that a new version exists.
+your own — or any other — GitLab, Gitea, or Forgejo instance, you install
+by hand and never learn that a new version exists.
 
-HACS*lab closes that gap. It speaks to GitLab (and Forgejo — see
-[Codeberg](https://codeberg.org)) directly: it finds repositories tagged for
-discovery, reads their metadata, compares versions, downloads the version
-archive, and installs it safely.
+HACS*lab closes that gap. It speaks to all three families directly: it finds
+repositories tagged for discovery, reads their metadata, compares versions,
+downloads the version archive, and installs it safely.
 
 ## Installation
 
@@ -29,9 +28,11 @@ by hand. It takes about two minutes.
 **Requirements**
 
 - Home Assistant 2025.2 or newer (the test lane runs against 2026.2)
-- A GitLab instance you can reach from your Home Assistant host
-- Optional: a personal access token with `read_api` scope — for private
-  repositories or to be gentler on rate limits
+- A GitLab, Gitea, or Forgejo (Codeberg) instance you can reach from your
+  Home Assistant host
+- Optional: a read token — for private repositories or to be gentler on
+  rate limits (GitLab `read_api` scope; a Gitea/Forgejo token with read
+  access)
 
 **Steps**
 
@@ -48,11 +49,15 @@ by hand. It takes about two minutes.
    core through relative imports, so it never touches your Python path.
 3. Restart Home Assistant.
 4. Add the integration: *Settings → Devices & Services → Add Integration*,
-   search for **HACS*lab**. Enter the host of your GitLab instance (a pasted
-   project link is shortened to its host), optionally your read token. The
-   dialog checks the connection and tells you plainly when it fails.
-   Several instances sit side by side — one per GitLab host, each with its
-   own entries.
+   search for **HACS*lab**. Enter the host of your instance (a pasted
+   project link is shortened to its host) and, optionally, your read token.
+   The provider stays on **auto** for most cases — HACS*lab asks the
+   instance itself which API it speaks (works for gitlab.com, codeberg.org,
+   gitea.com, and self-hosted servers alike); pick GitLab, Forgejo, or Gitea
+   by hand only if auto-detection cannot decide. The dialog checks the
+   connection and tells you plainly when it fails.
+   Several instances sit side by side — one per host, each with its own
+   provider, token, and entries.
 5. After setup you get a sidebar panel — no YAML anywhere. The sidebar
    entry wears the GitLab tanuki, served by the integration itself
    (`frontend/iconset.js`, registered on every frontend page).
@@ -85,11 +90,11 @@ by hand. It takes about two minutes.
 
 ## Using HACS*lab
 
-> **Handbuch:** the [project wiki](https://gitlab.schanz.ipv64.net/chance-konstruktion/
-> hacs-lab/-/wikis/Home) explains everything in depth, in German —
-> installation, adding providers (as many GitLab servers as you like),
-> settings, the store, repository-owner instructions, and a
-> troubleshooting page.
+> **Handbuch / Manual:** the [project wiki](https://gitlab.schanz.ipv64.net/chance-konstruktion/
+> hacs-lab/-/wikis/Home) explains everything in depth, **in German and in
+> English** — installation, adding providers (as many servers as you like,
+> GitLab/Gitea/Forgejo in any mix), settings, the store, repository-owner
+> instructions, and a troubleshooting page.
 
 - **The panel:** one page, collapsible sections like the HACS store —
   *Updatable*, *Installed*, *New* (scan findings), *Downloadable* —
@@ -98,13 +103,15 @@ by hand. It takes about two minutes.
   breadcrumbs in the detail view. Cards carry their project's avatar
   (or a letter in GitLab's pastel colours when a project has none).
   Names follow your theme's text colour — white in dark mode, black in
-  light mode.
-- **Unlimited servers:** every GitLab instance is one config entry —
-  set up as many as you like, each with its own token and interval.
-  The store shows them all as clickable instance chips (leading to
-  their settings) with a dashed "+ Add instance" button that opens
-  the setup dialog for the next domain. The empty store's first-run
-  hint carries the same button.
+  light mode. While the first stock is still on its way, the panel shows
+  a Home Assistant-style loading card (spinner in your theme's primary
+  colour) instead of an empty store.
+- **Unlimited servers, any mix:** every instance is one config entry —
+  set up as many as you like, each with its own provider (GitLab,
+  Forgejo, Gitea), token, and interval. The store shows them all as
+  clickable instance chips — each labelled with its provider — with a
+  dashed "+ Add instance" button that opens the setup dialog for the
+  next domain. The empty store's first-run hint carries the same button.
 - **Never an empty store:** the list lives in the *Lager*, a per-instance
   cache in Home Assistant's storage (`hacs_lab.lager.<host>`). Opening
   the panel paints from that cache instantly (no network round-trip),
@@ -117,10 +124,10 @@ by hand. It takes about two minutes.
 - **Add a custom repository:** open the panel, choose *Add*, paste the
   project URL, pick a category. HACS*lab reads the metadata, the version,
   and offers the install.
-- **Discover:** repositories whose owner set the topic `hacs` on the GitLab
-  side show up in the panel's *New* section — with description, stars, and
-  the latest version. A second topic (`hacs-plugin`, `hacs-theme`, …) fixes
-  the category without asking.
+- **Discover:** repositories whose owner set the topic `hacs` on their
+  GitLab, Gitea, or Forgejo project show up in the panel's *New* section
+  — with description, stars, and the latest version. A second topic
+  (`hacs-plugin`, `hacs-theme`, …) fixes the category without asking.
 - **Updates:** every entry gets an update entity and a heartbeat whose
   interval you can tune per entry. A new release or tag raises the update,
   the install service swaps the files safely — staged in a temporary
@@ -143,7 +150,8 @@ by hand. It takes about two minutes.
 
 ## For repository owners
 
-To make a GitLab project findable and installable by HACS*lab:
+To make a project findable and installable by HACS*lab (works the same on
+GitLab, Gitea, and Forgejo/Codeberg):
 
 1. Set the topic `hacs` under *Settings → General → Topics*.
 2. Put a valid `hacs.json` on the default branch. Minimal shape:
@@ -196,9 +204,11 @@ custom_components/hacs_lab/   the integration — thin Home Assistant layer
   core/                       the core — pure Python, no Home Assistant,
                               no network in tests; lives here since the
                               delivery-form decision (issue #11)
-    forge.py                  the provider interface (GitLab, Forgejo, …)
+    forge.py                  the provider interface (GitLab, Forgejo, Gitea, …)
     gitlab_forge.py           GitLab REST v4
     forgejo_forge.py          Forgejo (Codeberg recordings)
+    gitea_forge.py            Gitea — the Forgejo sister (topic search)
+    schmiede.py               the forge factory + provider auto-detection
     http_aiohttp.py           aiohttp-backed HttpClient (session passed in)
     validierung.py            hacs.json, manifest.json
     versionen.py              version compare and update decision
