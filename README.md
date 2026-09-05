@@ -68,7 +68,8 @@ by hand. It takes about two minutes.
 > the integration also carries an icon in the settings page
 > (`mdi:gitlab`); `icon.svg` in this repository is the brand artwork —
 > the demonic GitLab fox taking over the Home Assistant house: HA blue,
-> a white home, and a dark tanuki with burning GitLab seams.
+> a white home, and a tanuki in ember colors with burning GitLab seams
+> whose claws dig into the facade.
 
 ## Using HACS*lab
 
@@ -132,7 +133,7 @@ atomically, rolled back on failure.
 ## Repository layout
 
 ```
-icon.svg                      project icon — demonic GitLab fox in the HA house
+icon.svg                      project icon — demonic GitLab fox clawing into the HA house
 hacs.json                     repository conventions for HACS*lab itself
 custom_components/hacs_lab/   the integration — thin Home Assistant layer
   manifest.json               domain, version, config flow, icon
