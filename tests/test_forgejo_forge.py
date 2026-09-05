@@ -262,6 +262,43 @@ async def test_untergruppen_sind_ein_akzeptiertes_no_op():
     assert len(http.aufrufe) == 1
 
 
+@pytest.mark.asyncio
+async def test_stichwort_ersetzt_das_suchwort_topic_bleibt_scharf():
+    """Flug 2091: die Kopfsuche -- das Wort tritt als ``q`` an die
+    Stelle des Themennamens; die exakte Themen-Filterung laeuft danach
+    trotzdem, genau wie ohne Stichwort."""
+    antwort = {
+        "ok": True,
+        "data": [
+            forgejo_repo(full_name="a/zigbee", topics=("hacs",)),
+            forgejo_repo(full_name="b/zigbee-ohne", topics=()),
+        ],
+    }
+    http = FakeHttp(json_antworten={"/repos/search": antwort})
+    treffer = await ForgejoForge(http, HOST).suche_nach_topic("hacs", stichwort="zigbee")
+    assert [t.full_name for t in treffer] == ["a/zigbee"]
+    assert http.aufrufe[0][1]["q"] == "zigbee"
+
+
+@pytest.mark.asyncio
+async def test_gruppensuche_filtert_das_stichwort_von_hand():
+    # Die Organisations-Listung kennt kein Suchwort: Name und
+    # Beschreibung werden hier gefiltert -- gross/klein ist gleich.
+    antwort = [
+        forgejo_repo(full_name="gruppe/zigbee", description="Sensor"),
+        forgejo_repo(full_name="gruppe/anderes", description="ganz was anderes"),
+        forgejo_repo(full_name="gruppe/sensor", description="zigbee stack"),
+    ]
+    http = FakeHttp(json_antworten={"/orgs/gruppe/repos": antwort})
+    treffer = await ForgejoForge(http, HOST).suche_nach_topic(
+        "hacs", gruppe="gruppe", stichwort="ZigBee"
+    )
+    assert sorted(t.full_name for t in treffer) == [
+        "gruppe/sensor",
+        "gruppe/zigbee",
+    ]
+
+
 # ------------------------------------------------------------------
 # Die Abnahme von M9: echte Aufzeichnungen von codeberg.org
 # ------------------------------------------------------------------

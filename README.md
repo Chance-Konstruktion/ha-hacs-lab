@@ -97,10 +97,16 @@ by hand. It takes about two minutes.
 > instructions, and a troubleshooting page.
 
 - **The panel:** one page, collapsible sections like the HACS store —
-  *Updatable*, *Installed*, *New* (scan findings), *Downloadable* —
+  *Updatable*, *Installed*, *New* (search findings), *Downloadable* —
   each header counting its cards. The top bar follows your GitLab:
   tanuki mark, a "Search or go to …" field, refresh and add tools,
-  breadcrumbs in the detail view. Cards carry their project's avatar
+  breadcrumbs in the detail view. That search field is the ONE search
+  (deliberately no second form under the sections): typing narrows
+  everything, **Enter** asks every configured instance directly — a
+  word with a slash is a group path, any other a keyword the provider
+  matches against name and description; the findings land in *New*,
+  and a word nobody knows simply yields an empty section instead of an
+  error. Cards carry their project's avatar
   (or a letter in GitLab's pastel colours when a project has none).
   Names follow your theme's text colour — white in dark mode, black in
   light mode. While the first stock is still on its way, the panel shows

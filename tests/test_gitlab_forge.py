@@ -104,6 +104,32 @@ async def test_instanzweite_suche_geht_ohne_gruppe():
 
 
 @pytest.mark.asyncio
+async def test_stichwort_reist_als_search_parameter():
+    """Flug 2091: die Kopfsuche des Ladens -- das Wort sucht in Name
+    und Beschreibung, das Topic bleibt daneben scharf."""
+    http = FakeHttp({"/api/v4/projects": [projekt()]})
+    treffer = await GitLabForge(http, HOST).suche_nach_topic(
+        "hacs", stichwort="bienentanz"
+    )
+    assert len(treffer) == 1
+    params = http.aufrufe[0][1]
+    assert params["search"] == "bienentanz"
+    assert params["topic"] == "hacs"
+
+
+@pytest.mark.asyncio
+async def test_stichwort_und_gruppe_reisen_zusammen():
+    http = FakeHttp({"/groups/": [projekt()]})
+    treffer = await GitLabForge(http, HOST).suche_nach_topic(
+        "hacs", gruppe="foo", stichwort="bar"
+    )
+    assert len(treffer) == 1
+    params = http.aufrufe[0][1]
+    assert params["search"] == "bar"
+    assert params["include_subgroups"] == "true"
+
+
+@pytest.mark.asyncio
 async def test_stammdaten_nennen_die_web_ansichten():
     """Tickets und Releases: die Links gehoeren dem Anbieter (Stufe M7).
 

@@ -147,13 +147,17 @@ class Forge(Protocol):
         self,
         topic: str,
         gruppe: str | None = None,
+        stichwort: str | None = None,
         mit_untergruppen: bool = True,
         grenze: int | None = None,
     ) -> list[RepositoryInfo]:
         """Alle Projekte, deren Besitzer sie mit ``topic`` gekennzeichnet hat.
 
-        ``grenze`` deckelt den Abruf: hoechstens so viele Eintraege,
-        genau eine Seite. Gedacht fuer die Pruefverbindung im
+        ``stichwort`` greift das Wort im Namen oder der Beschreibung auf
+        -- die Kopfsuche des Ladens reist so bis zum Anbieter. Die
+        Themen-Filterung bleibt scharf: das Wort engt ein, das Topic
+        entscheidet. ``grenze`` deckelt den Abruf: hoechstens so viele
+        Eintraege, genau eine Seite. Gedacht fuer die Pruefverbindung im
         Einrichtungsdialog -- die will beweisen, dass Host, API und
         Token stimmen, und nicht die halbe Instanz herunterladen.
         """

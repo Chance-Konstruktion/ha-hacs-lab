@@ -65,6 +65,18 @@
  * * das Suffix-Fallback kennt gitea: foo/bar*gitea zaehlt zu seinen
  *   Buchstaben wie *lab und *forge.
  *
+ * Flug 2091 macht die Suche EINMALIG -- der Wunsch des Imkers: eine
+ * Suchoption oben in der Leiste, keine zweite unter den Kategorien.
+ *
+ * * das Suchfeld im Balken grenzt beim Tippen ein (wie gehabt) und
+ *   fragt auf Enter ALLE eingerichteten Instanzen: ein Wort mit
+ *   Schraegstrich ist ein Gruppen-Weg (frueher das Feld unter Neu),
+ *   jedes andere ein Stichwort, das der Anbieter in Name und
+ *   Beschreibung sucht. Die Funde landen im Abschnitt Neu.
+ * * das Formular unter dem Abschnitt Neu ist damit weg -- die Suche
+ *   hat nur noch EIN Zuhause, und die Lupe dreht sich, solange die
+ *   Server antworten.
+ *
  * Zwei Sprachen, im File selbst: Deutsch und Englisch, gewaehlt nach
  * der Sprache der Bedienung. Der Kennzeichnungs-Suffix (*lab, *forge,
  * *gitea)
@@ -93,21 +105,17 @@ const TEXTE = {
     abschnittstexte: {
       aktualisierbar: "Eine neuere Version ist erschienen",
       installiert: "Heruntergeladen und auf dem neuesten Stand",
-      neu: "Funde der Suche — noch nicht aufgenommen",
+      neu: "Was die Suche oben fand — noch nicht aufgenommen",
       downloadbar: "Beobachtet, aber noch nichts heruntergeladen",
     },
     abschnitte_leer: {
       aktualisierbar: "Nichts zu tun — alles auf dem neuesten Stand.",
       installiert: "Noch nichts heruntergeladen.",
-      neu: "Noch keine Funde — starte die Suche.",
+      neu: "Noch keine Funde — oben suchen und Enter drücken.",
       downloadbar: "Nichts Beobachtetes ohne Download.",
     },
     stand: "Stand",
-    scan: "Suchen",
-    quelle: "Quelle",
-    gruppe: "Gruppe (leer = ganze Instanz)",
-    untergruppen: "mit Untergruppen",
-    entwicklung: "auch hacs-development",
+    suche_hinweis: "Eingrenzen beim Tippen — Enter fragt alle Instanzen",
     hinzufuegen: "Hinzufügen",
     entfernen: "Entfernen",
     deinstallieren: "Deinstallieren",
@@ -175,21 +183,17 @@ const TEXTE = {
     abschnittstexte: {
       aktualisierbar: "A newer version has been released",
       installiert: "Downloaded and up to date",
-      neu: "Findings of the scan — not added yet",
+      neu: "What the search above found — not added yet",
       downloadbar: "Watched, but nothing downloaded yet",
     },
     abschnitte_leer: {
       aktualisierbar: "Nothing to do — everything is up to date.",
       installiert: "Nothing downloaded yet.",
-      neu: "No findings yet — run the scan.",
+      neu: "No findings yet — search above and press Enter.",
       downloadbar: "Nothing watched without a download.",
     },
     stand: "as of",
-    scan: "Scan",
-    quelle: "Source",
-    gruppe: "Group (empty = whole instance)",
-    untergruppen: "include subgroups",
-    entwicklung: "include hacs-development",
+    suche_hinweis: "Narrow while typing — Enter asks every instance",
     hinzufuegen: "Add",
     entfernen: "Remove",
     deinstallieren: "Uninstall",
@@ -568,10 +572,9 @@ class HacsLabPanel extends HTMLElement {
     this._funde_pro_host = {}; // host -> Funde (Lager oder eigene Suche)
     this._aktualisiert_am = {}; // host -> Zeitstempel des Lagers
     this._kategorien = KATEGORIEN;
-    this._scan_host = "";
-    this._scan_gruppe = "";
-    this._scan_untergruppen = true;
-    this._scan_entwicklung = false;
+    this._funde_von = ""; // Gruppen-Wort, das die Funde zuletzt erzeugte (Flug 2091)
+    this._sucht = false; // laeuft gerade die Kopfsuche gegen die Instanzen?
+    this._such_fehler = {}; // host -> Grund (nur von der Kopfsuche)
     this._detail = null; // { host, pfad, daten }
     this._fehler = "";
     this._instanz_fehler = {}; // host -> Grund (aus dem frischen Lauf)
@@ -753,36 +756,64 @@ class HacsLabPanel extends HTMLElement {
     this._kategorien = antwort.kategorien || KATEGORIEN;
     this._funde_pro_host = {};
     for (const fund of antwort.funde || []) {
-      const host = fund.host || this._scan_host || "";
+      const host = fund.host || "";
       (this._funde_pro_host[host] = this._funde_pro_host[host] || []).push(fund);
     }
     this._aktualisiert_am = antwort.aktualisiert_am || {};
-    if (!this._scan_host && this._instanzen.length) {
-      this._scan_host = this._instanzen[0];
-    }
+    // Der frische Lauf ist die neuere Wahrheit: die Funde stammen jetzt
+    // wieder vom Takt des Hauses, nicht mehr von der letzten Kopfsuche.
+    this._funde_von = "";
+    this._such_fehler = {};
   }
 
-  /** Entdeckung starten (Stufe M6: der Scan schreibt nichts). */
-  async _scan() {
-    this._beschaeftigt = true;
-    this._zeichne();
-    try {
-      const antwort = await this._hass.callWS({
-        type: "hacs_lab/entdecken",
-        host: this._scan_host,
-        gruppe: this._scan_gruppe,
-        mit_untergruppen: this._scan_untergruppen,
-        mit_entwicklung: this._scan_entwicklung,
-      });
-      // Die eigene Suche gilt fuer diese Instanz -- bis der naechste
-      // Lauf des Lagers sie mit dem Hausbestand ueberschreibt.
-      this._funde_pro_host[this._scan_host] = antwort.funde || [];
-      this._fehler = "";
-    } catch (fehler) {
-      this._fehler = this._fehlertext(fehler);
+  /**
+   * Die Kopfsuche fragt die Instanzen (Flug 2091: die EINE Suche).
+   *
+   * Tippen grenzt ein -- Enter fragt alle eingerichteten Server direkt.
+   * Ein Wort mit Schraegstrich ist ein Gruppen-Weg (wie frueher das
+   * Feld unter Neu), alles andere ein Stichwort, das der Anbieter in
+   * Name und Beschreibung sucht. Leer gefragt: der ganze Bestand,
+   * genau wie der Takt ihn faende. Die Funde landen im Abschnitt Neu
+   * und bleiben bis zum naechsten Lauf des Lagers stehen; gescheiterte
+   * Server melden sich im Banner und verlieren ihre letzten Funde
+   * nicht.
+   */
+  async _suche_server() {
+    if (this._sucht || !this._hass || !this._instanzen.length) {
+      return;
     }
-    this._beschaeftigt = false;
+    this._sucht = true;
     this._zeichne();
+    const nadel = this._suche.trim();
+    const funde_neu = {};
+    const fehler = {};
+    for (const host of this._instanzen) {
+      const frage = { type: "hacs_lab/entdecken", host: host };
+      if (nadel.includes("/")) {
+        frage.gruppe = nadel;
+      } else if (nadel) {
+        frage.stichwort = nadel;
+      }
+      try {
+        const antwort = await this._hass.callWS(frage);
+        funde_neu[host] = antwort.funde || [];
+      } catch (grund) {
+        fehler[host] = this._fehlertext(grund);
+        funde_neu[host] = this._funde_pro_host[host] || [];
+      }
+    }
+    this._funde_pro_host = funde_neu;
+    this._funde_von = nadel.includes("/") ? nadel : "";
+    this._such_fehler = fehler;
+    this._sucht = false;
+    this._zeichne();
+    // Die Frage ist fertig -- der Fokus gehoert zurueck ins Feld, der
+    // Cursor an sein Ende (dieselbe Kunst wie beim Tippen).
+    const frisch = this.querySelector('input[data-rolle="suche"]');
+    if (frisch) {
+      frisch.focus();
+      frisch.setSelectionRange(frisch.value.length, frisch.value.length);
+    }
   }
 
   /** Detailansicht holen: Stammdaten, README, Releases. */
@@ -968,12 +999,19 @@ class HacsLabPanel extends HTMLElement {
         downloadbar.push(e);
       }
     }
+    // Die Funde der Kopfsuche sind die ANTWORT auf das Gruppen-Wort --
+    // wenn die Nadel genau dieses Wort ist, zeigt der Abschnitt Neu
+    // alles, was die Server sagten (die Namen muessen das Wort ja nicht
+    // tragen). Jede andere Nadel greift wie ueberall: Name, Pfad, Text.
+    const nadel = this._suche.trim().toLowerCase();
+    const gruppen_wort = this._funde_von.trim().toLowerCase();
     const neu = [];
     for (const host of Object.keys(this._funde_pro_host)) {
       for (const fund of this._funde_pro_host[host]) {
-        if (this._passt(fund)) {
-          neu.push(fund);
+        if (nadel && nadel !== gruppen_wort && !this._passt(fund)) {
+          continue;
         }
+        neu.push(fund);
       }
     }
     return {
@@ -1058,11 +1096,14 @@ class HacsLabPanel extends HTMLElement {
     return `
       <div class="hl-balken">
         ${marke}
-        <div class="hl-suchfeld">
+        <div class="hl-suchfeld ${this._sucht ? "sucht" : ""}">
           ${LUPE_SVG}
           <input class="hl-suche" type="search" placeholder="${fliehe(t.suche)}"
                  value="${fliehe(this._suche)}" data-rolle="suche"
-                 aria-label="${fliehe(t.suche)}">
+                 title="${fliehe(t.suche_hinweis)}"
+                 enterkeyhint="search"
+                 aria-label="${fliehe(t.suche)}"
+                 ${this._sucht ? 'aria-busy="true"' : ""}>
         </div>
         <div class="hl-werkzeuge">
           <button class="hl-ikonknopf" data-aktion="aktualisieren" title="${fliehe(t.aktualisieren)}"
@@ -1104,7 +1145,7 @@ class HacsLabPanel extends HTMLElement {
             <option value="datum" ${this._sort === "datum" ? "selected" : ""}>${fliehe(t.sort.datum)}</option>
           </select>
         </label>
-        <span class="hl-zaehler-zeile">${fliehe(t.anzahl(gesamt))}${stand_zeile}${this._beschaeftigt ? ` · ${fliehe(t.frisch_laeuft)}` : ""}</span>
+        <span class="hl-zaehler-zeile">${fliehe(t.anzahl(gesamt))}${stand_zeile}${this._sucht ? ` · ${fliehe(t.scan_laeuft)}` : this._beschaeftigt ? ` · ${fliehe(t.frisch_laeuft)}` : ""}</span>
       </div>
       <div class="hl-instanzzeile">
         <span class="hl-instanzwort">${fliehe(t.instanzen_titel)}</span>
@@ -1116,9 +1157,13 @@ class HacsLabPanel extends HTMLElement {
           .join("")}
         <button class="hl-instanz hl-instanz-neu" data-aktion="instanz_hinzu" title="${fliehe(t.instanz_hinzufuegen)}">${PLUS_SVG}<span>${fliehe(t.instanz_hinzufuegen)}</span></button>
       </div>`;
-    const meldung = Object.keys(this._instanz_fehler).length
+    const meldungen = {
+      ...this._instanz_fehler,
+      ...this._such_fehler,
+    };
+    const meldung = Object.keys(meldungen).length
       ? `<div class="hl-banner">${WARN_SVG}<span>${fliehe(
-          Object.entries(this._instanz_fehler)
+          Object.entries(meldungen)
             .map(([host, grund]) => `${host}: ${grund}`)
             .join(" · ")
         )}</span></div>`
@@ -1136,7 +1181,6 @@ class HacsLabPanel extends HTMLElement {
       schlussel === "neu"
         ? zeilen.map((f) => this._html_zeile_fund(f)).join("")
         : zeilen.map((e) => this._html_zeile_eintrag(e)).join("");
-    const scan_form = schlussel === "neu" ? this._html_scan() : "";
     const leer = karten
       ? ""
       : `<div class="hl-abschnitt-leer">${fliehe(t.abschnitte_leer[schlussel])}</div>`;
@@ -1149,32 +1193,8 @@ class HacsLabPanel extends HTMLElement {
           <span class="hl-abschnitt-text">${fliehe(t.abschnittstexte[schlussel])}</span>
           <span class="hl-zaehler ${schlussel === "aktualisierbar" ? "hl-zaehler-heiss" : ""}">${fliehe(String(zeilen.length))}</span>
         </button>
-        ${offen ? `<div class="hl-abschnitt-koerper">${scan_form}${karten}${leer}</div>` : ""}
+        ${offen ? `<div class="hl-abschnitt-koerper">${karten}${leer}</div>` : ""}
       </section>`;
-  }
-
-  /** Die Suchleiste fuer die Entdeckung -- im Abschnitt Neu zu Hause. */
-  _html_scan() {
-    const t = this._t;
-    return `
-      <div class="hl-scan">
-        <label>${fliehe(t.quelle)}
-          <select data-rolle="scan-host">
-            ${this._instanzen
-              .map(
-                (h) =>
-                  `<option value="${fliehe(h)}" ${this._scan_host === h ? "selected" : ""}>${fliehe(h)}</option>`
-              )
-              .join("")}
-          </select>
-        </label>
-        <label class="hl-gruppe">${fliehe(t.gruppe)}
-          <input type="text" value="${fliehe(this._scan_gruppe)}" data-rolle="scan-gruppe" placeholder="gruppe/untergruppe">
-        </label>
-        <label class="hl-häkchen"><input type="checkbox" data-rolle="scan-untergruppen" ${this._scan_untergruppen ? "checked" : ""}> ${fliehe(t.untergruppen)}</label>
-        <label class="hl-häkchen"><input type="checkbox" data-rolle="scan-entwicklung" ${this._scan_entwicklung ? "checked" : ""}> ${fliehe(t.entwicklung)}</label>
-        <button class="hl-knopf hl-primaer" data-aktion="scan" ${this._beschaeftigt ? "disabled" : ""}>${fliehe(this._beschaeftigt ? t.scan_laeuft : t.scan)}</button>
-      </div>`;
   }
 
   /** Das Zeichen einer Karte: Bild, oder farbiger Buchstabe (GitLab). */
@@ -1258,7 +1278,7 @@ class HacsLabPanel extends HTMLElement {
 
   _html_zeile_fund(f) {
     const t = this._t;
-    const host = f.host || this._scan_host;
+    const host = f.host || "";
     return `
       <div class="hl-karte ${f.vorhanden ? "schon-da" : ""}">
         ${this._avatar_html(f)}
@@ -1399,8 +1419,6 @@ class HacsLabPanel extends HTMLElement {
         } else if (aktion === "zurueck") {
           this._detail = null;
           this._zeichne();
-        } else if (aktion === "scan") {
-          this._scan();
         } else if (aktion === "details") {
           this._hole_detail(knopf.dataset.host, knopf.dataset.pfad);
         } else if (aktion === "install" && eintrag) {
@@ -1447,6 +1465,14 @@ class HacsLabPanel extends HTMLElement {
           frisch.setSelectionRange(frisch.value.length, frisch.value.length);
         }
       });
+      // Enter fragt die Instanzen: die EINE Suche des Ladens (Flug
+      // 2091) -- das Formular unter den Kategorien ist damit erspart.
+      suche.addEventListener("keydown", (ereignis) => {
+        if (ereignis.key === "Enter") {
+          ereignis.preventDefault();
+          this._suche_server();
+        }
+      });
     }
 
     const sort = $('select[data-rolle="sort"]');
@@ -1454,31 +1480,6 @@ class HacsLabPanel extends HTMLElement {
       sort.addEventListener("change", () => {
         this._sort = sort.value;
         this._zeichne();
-      });
-    }
-
-    const scan_host = $('select[data-rolle="scan-host"]');
-    if (scan_host) {
-      scan_host.addEventListener("change", () => {
-        this._scan_host = scan_host.value;
-      });
-    }
-    const scan_gruppe = $('input[data-rolle="scan-gruppe"]');
-    if (scan_gruppe) {
-      scan_gruppe.addEventListener("input", () => {
-        this._scan_gruppe = scan_gruppe.value;
-      });
-    }
-    const scan_unter = $('input[data-rolle="scan-untergruppen"]');
-    if (scan_unter) {
-      scan_unter.addEventListener("change", () => {
-        this._scan_untergruppen = scan_unter.checked;
-      });
-    }
-    const scan_entw = $('input[data-rolle="scan-entwicklung"]');
-    if (scan_entw) {
-      scan_entw.addEventListener("change", () => {
-        this._scan_entwicklung = scan_entw.checked;
       });
     }
   }
@@ -1602,18 +1603,10 @@ const STIL = `
 .hl-abschnitt-koerper { padding: 2px 0 16px 18px; }
 .hl-abschnitt-leer { opacity: .65; padding: 10px 0; font-size: 13.5px; }
 
-/* -- Die Suche der Entdeckung (Abschnitt Neu) */
-.hl-scan { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
-  padding: 10px 12px; margin-bottom: 12px; border: 1px dashed rgba(127, 127, 127, .4);
-  border-radius: 4px; font-size: 13px; }
-.hl-scan label { display: flex; align-items: center; gap: 6px;
-  color: var(--secondary-text-color); }
-.hl-scan input[type="text"], .hl-scan select {
-  border: 1px solid rgba(127, 127, 127, .4); border-radius: 4px;
-  background: var(--card-background-color, #fff); padding: 6px 8px; font: inherit;
-  font-size: 13px; color: var(--primary-text-color); }
-.hl-gruppe input { width: 220px; }
-.hl-häkchen { cursor: pointer; }
+/* -- Die Kopfsuche (Flug 2091): waehrend sie laeuft, dreht sich die
+   Lupe -- dieselbe Sprache wie der Rundblitz der Ladeseite. */
+.hl-suchfeld.sucht .hl-lupe { animation: hl-drehen .9s linear infinite;
+  color: var(--hl-orange); }
 
 /* -- Karten: GitLaws Zeilen -- kompakt, Rand statt Schatten */
 .hl-karte { display: flex; gap: 12px; background: var(--card-background-color, #fff);

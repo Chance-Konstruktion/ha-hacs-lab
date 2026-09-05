@@ -229,6 +229,7 @@ async def ws_erneuern(
         vol.Required("type"): "hacs_lab/entdecken",
         vol.Required("host"): str,
         vol.Optional("gruppe", default=""): str,
+        vol.Optional("stichwort", default=""): str,
         vol.Optional("mit_untergruppen", default=True): bool,
         vol.Optional("mit_entwicklung", default=False): bool,
     }
@@ -239,11 +240,14 @@ async def ws_entdecken(
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Der Scan aus Stufe M6: finden, nicht aufnehmen.
+    """Die Suche hinter der Kopfsuche des Ladens: finden, nicht aufnehmen.
 
     Der Lauf schreibt nichts -- was davon in die Liste soll, entscheidet
     die Bedienung danach. Projekte mit ``hacs-development``-Topic
     bleiben aussen vor, ausser sie werden ausdruecklich gewuenscht.
+    Eine Suche, deren Gruppe oder Stichwort niemand kennt, ist KEIN
+    Fehler: sie zahlt ehrlich leere Funde -- die Kopfsuche darf
+    falsch getippte Worte nicht als Instanz-Stoerung melden.
     """
     laufzeit = _laufzeit_nach_host(hass, str(msg["host"]))
     if laufzeit is None:
@@ -256,9 +260,12 @@ async def ws_entdecken(
         funde = await entdecke(
             laufzeit.forge,
             gruppe=str(msg["gruppe"]) or None,
+            stichwort=str(msg["stichwort"]) or None,
             mit_untergruppen=bool(msg["mit_untergruppen"]),
             mit_vorab=bool(msg["mit_entwicklung"]),
         )
+    except NichtGefunden:
+        funde = []
     except ForgeFehler as fehler:
         connection.send_error(msg["id"], "forge_fehler", str(fehler))
         return
