@@ -235,7 +235,8 @@ const TEXTE = {
     },
     scan_laeuft: "Scanning …",
     frisch_laeuft: "fresh run …",
-    fuss_zeile: "Made for freedom — no GitHub monopoly shit.",
+    fuss_zeile:
+      "Made for freedom — no GitHub monopoly, because one platform is a single point of failure.",
     lade_titel: "Loading …",
     lade_text: "The stock is on its way from the store cache — one moment.",
     detail_lade_text: "Fetching metadata, description, and releases.",

@@ -196,10 +196,12 @@ async def test_panel_ist_ohne_yaml_angemeldet(
     assert "#FFD599" in koerper  # die Pastell-Palette der Buchstaben
 
     # Flug 2092: die Fusszeile -- Fuchs und Geluebde am unteren Rand,
-    # in beiden Sprachen (das Wort duerfen die Imker selber lesen).
+    # in beiden Sprachen (das Wort duerfen die Imker selber lesen:
+    # deutsch bleibt derb, englisch nennt den Grund -- Single Point
+    # of Failure).
     assert "hl-fuss" in koerper
     assert "fuss_zeile" in koerper
-    assert "no GitHub monopoly shit" in koerper
+    assert "single point of failure" in koerper
     assert "hl-fuchs-tanz" in koerper  # der Fuchs tanzt bei Streicheln
 
     # Das Iconset wird neben der Panel-Datei eigenen Weg geliefert.
