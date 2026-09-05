@@ -191,10 +191,14 @@ async def test_iconset_haengt_an_jeder_seite(
 
     add_extra_js_url haengt das Iconset an das Grundgeruest des Frontends
     -- dieselbe Stelle, deren sich HACS fuer sein eigenes Zeichen bedient.
-    Das Testhaus richtet das Frontend hier von Hand (wie das Hochfahren
-    es ohnehin vor den Custom-Integrationen tut).
+    Das Grundgeruest selbst aufzurichten verlangt ``hass_frontend`` (das
+    Bild der CI-Bahn fuehrt es nicht mit) -- der UrlManager ist derselbe
+    Dienst, hier von Hand angestellt, wie das Frontend ihn beim Hochfahren
+    vor den Custom-Integrationen anstellt.
     """
-    assert await async_setup_component(hass, "frontend", {})
+    hass.data[frontend.DATA_EXTRA_MODULE_URL] = frontend.UrlManager(
+        lambda art, url: None, []
+    )
     sitzung_einpflanzen([herzschlag()])
     await richten(hass, mock_eintrag())
 
