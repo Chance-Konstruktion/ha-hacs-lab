@@ -186,6 +186,15 @@ async def test_panel_ist_ohne_yaml_angemeldet(
     for schlussel in ("aktualisierbar", "installiert", "neu", "downloadbar"):
         assert schlussel in koerper
 
+    # Flug 2085: der Laden ist unendlich und farbig -- Instanz-Plättchen
+    # mit dem Weg in den Einrichtungsdialog (endlos viele Server), und
+    # die Buchstaben-Zeichen in GitLabs Pastell.
+    assert "hl-instanz" in koerper
+    assert "location-changed" in koerper
+    assert "/config/integrations/dashboard/add?domain=hacs_lab" in koerper
+    assert "/config/integrations/integration/hacs_lab" in koerper
+    assert "#FFD599" in koerper  # die Pastell-Palette der Buchstaben
+
     # Das Iconset wird neben der Panel-Datei eigenen Weg geliefert.
     antwort = await client.get("/hacs_lab/iconset.js")
     assert antwort.status == 200
@@ -373,6 +382,85 @@ async def test_eintraege_nennt_instanzen_und_kategorien(
     assert antwort["result"]["instanzen"] == [HOST]
     assert "integration" in antwort["result"]["kategorien"]
     assert "plugin" in antwort["result"]["kategorien"]
+
+
+async def test_der_laden_teilt_unendlich_viele_instanzen(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
+) -> None:
+    """Flug 2085: zwei Domains, ein Laden -- und keine Grenze in Sicht.
+
+    Der Imker will endlos viele Server: jede Domain ist ein eigener
+    Eintrag, und die Liste sammelt sie alle. Der Beweis hier haelt
+    zwei Instanzen nebeneinander (die eigene und eine fremde) --
+    Lager je Instanz im Speicher, und die Antwort der Liste nennt
+    Zeilen aus beiden, beide Instanzen und beide Staende. Die dritte,
+    vierte, n-te Instanz folgt demselben Weg: weiterer Eintrag,
+    weiteres Lager -- der Befehl fragt jeden gleichermaßen ab.
+    """
+    zweiter = "gitlab.daumen.net"
+
+    def lager_zeile(host: str, name: str, schluessel: str) -> dict:
+        return {
+            "storage_key": schluessel,
+            "name": name,
+            "pfad": "gruppe/" + name.lower(),
+            "kategorie": "integration",
+            "host": host,
+            "hinzugefuegt_am": "2026-09-04T00:00:00+00:00",
+            "entity_id": None,
+            "installiert": "1.0.0",
+            "neueste": "1.0.0",
+            "sterne": 3,
+            "offene_tickets": 0,
+            "beschreibung": "eine Zeile aus " + host,
+        }
+
+    for host in (HOST, zweiter):
+        hass_storage["hacs_lab." + host.replace(".", "_")] = {
+            "version": 1,
+            "data": {"eintraege": [], "stand": {}},
+        }
+        hass_storage["hacs_lab.lager." + host.replace(".", "_")] = {
+            "version": 1,
+            "data": {
+                "eintraege": [
+                    lager_zeile(
+                        host,
+                        "Bienentanz" if host == HOST else "Daumendruck",
+                        "gitlab@" + host + ":789099",
+                    )
+                ],
+                "funde": [],
+                "aktualisiert_am": "2026-09-04T08:00:00+00:00",
+            },
+        }
+
+    attrappe = sitzung_einpflanzen([herzschlag(), herzschlag()])
+    await richten(hass, mock_eintrag())
+    await richten(
+        hass,
+        MockConfigEntry(
+            domain=DOMAIN,
+            title=zweiter,
+            data={CONF_HOST: zweiter, CONF_TOKEN: ""},
+            unique_id=zweiter,
+        ),
+    )
+    client = await hass_ws_client(hass)
+
+    antwort = await frage(client, 1, "hacs_lab/eintraege")
+    assert antwort["success"]
+    # Beide Instanzen stehen da -- sortiert, wie die Bedienung sie sieht.
+    assert antwort["result"]["instanzen"] == sorted([HOST, zweiter])
+    # Die Zeilen beider Lager reisen in derselben Liste.
+    hosts = {zeile["host"] for zeile in antwort["result"]["eintraege"]}
+    assert hosts == {HOST, zweiter}
+    assert len(antwort["result"]["eintraege"]) == 2
+    # Und beide Staende: der Laden sagt, wie alt jedes Lager ist.
+    assert set(antwort["result"]["aktualisiert_am"]) == {HOST, zweiter}
+    # Der Griff kostete kein Netz -- zwei Herzschlaege beim Richten,
+    # die Liste kam aus den Speichern.
+    assert len(attrappe.abrufe) == 2
 
 
 # ----------------------------------------------------------------------

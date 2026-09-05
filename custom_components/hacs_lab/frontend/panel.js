@@ -39,6 +39,19 @@
  *   heruntergeladen und oben ist; Downloadbar ist, was beobachtet
  *   wird, aber noch nichts heruntergeladen hat.
  *
+ * Flug 2085 macht den Laden unendlich -- die Wünsche des Imkers:
+ *
+ * * die Zeichen der Karten wie im Original-HACS: das Bild, wenn die
+ *   Forge eins nennt, sonst ein Buchstabe in GitLabs Farben (dieselbe
+ *   Pastell-Palette, derselbe Buchstabe immer dieselbe Farbe).
+ * * die Instanzen stehen als Plättchen im Laden: jedes klickbar zu
+ *   seinen Einstellungen (Abstand, Custom Repositories, Entfernen),
+ *   und der gestrichelte «+»-Knopf daneben öffnet den Einrichtungs-
+ *   dialog für die NÄCHSTE Instanz. Es gibt keine Obergrenze: jede
+ *   Domain ist ein Eintrag, der Laden sammelt sie alle.
+ * * der leere Laden (erste Einrichtung) schickt mit einem Knopf
+ *   direkt in denselben Dialog -- kein Suchen in den Einstellungen.
+ *
  * Zwei Sprachen, im File selbst: Deutsch und Englisch, gewaehlt nach
  * der Sprache der Bedienung. Der Kennzeichnungs-Suffix (*lab, *forge)
  * kommt fertig vom Server -- hier wird nichts doppelt gewusst.
@@ -122,6 +135,11 @@ const TEXTE = {
     },
     scan_laeuft: "Suche läuft …",
     frisch_laeuft: "frischer Lauf …",
+    instanzen_titel: "Instanzen",
+    instanz_hinzufuegen: "Instanz hinzufügen",
+    erste_instanz: "Erste Instanz einrichten",
+    instanz_verwalten:
+      "Instanz öffnen — Abstand, Custom Repositories, Entfernen",
   },
   en: {
     titel: "HACS*lab",
@@ -195,6 +213,10 @@ const TEXTE = {
     },
     scan_laeuft: "Scanning …",
     frisch_laeuft: "fresh run …",
+    instanzen_titel: "Instances",
+    instanz_hinzufuegen: "Add instance",
+    erste_instanz: "Set up the first instance",
+    instanz_verwalten: "Open instance — interval, custom repositories, remove",
   },
 };
 
@@ -442,6 +464,14 @@ const PLUS_SVG =
   '<path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.7" ' +
   'stroke-linecap="round"/></svg>';
 
+/** Der Server -- zwei Schichten mit Licht, fuer die Instanz-Plaettchen. */
+const SERVER_SVG =
+  '<svg class="hl-server" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
+  '<rect x="1.5" y="1.8" width="13" height="4.6" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+  '<circle cx="4.1" cy="4.1" r="0.95" fill="currentColor"/>' +
+  '<rect x="1.5" y="9.6" width="13" height="4.6" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+  '<circle cx="4.1" cy="11.9" r="0.95" fill="currentColor"/></svg>';
+
 /** Warndreieck fuer die Instanz-Meldung. */
 const WARN_SVG =
   '<svg class="hl-warn" viewBox="0 0 16 16" aria-hidden="true" focusable="false">' +
@@ -452,6 +482,36 @@ const WARN_SVG =
 
 /** Wie lange ein frischer Lauf ruht, bevor der Betritt ihn erneut erzwinge. */
 const BETRETEN_RUHE_MS = 15000;
+
+/**
+ * GitLabs Pastell-Palette fuer Buchstaben-Zeichen (Flug 2085): fehlt
+ * das Bild eines Projekts, bekommt sein Buchstabe eine dieser Farben
+ * -- dieselbe Farbe fuer denselben Namen, wie GitLab es mit seinen
+ * Initialen-Avataren haelt. Der Buchstabe bleibt dunkel (#333238,
+ * GitLabs Leisten-Farbe): lesbar auf Pastell, bei Tag und bei Nacht.
+ */
+const ZEICHEN_FARBEN = [
+  "#FFD599",
+  "#D6EFFF",
+  "#FCD5CE",
+  "#D3FDD8",
+  "#E4DFFF",
+  "#FFE1BE",
+  "#C4D7F6",
+  "#FDE8F6",
+  "#D9F2E6",
+  "#F3E5C3",
+];
+const ZEICHEN_SCHRIFT = "#333238";
+
+/** Dasselbe Wort -- dieselbe Farbe. Stabil, unauffaellig, ohne Speicher. */
+function zeichen_farbe(name) {
+  let saat = 0;
+  for (const zeichen of String(name)) {
+    saat = (saat * 31 + (zeichen.codePointAt(0) || 0)) % 9973;
+  }
+  return ZEICHEN_FARBEN[saat % ZEICHEN_FARBEN.length];
+}
 
 /** Die Klasse des Panels. */
 class HacsLabPanel extends HTMLElement {
@@ -601,7 +661,25 @@ class HacsLabPanel extends HTMLElement {
     this._zeichne();
   }
 
-  /** Liste laden -- der schnelle Griff aus dem Lager (kein Netzruf). */
+  /**
+   * Ziel im Home-Assistant-Frontend ansteuern (Flug 2085).
+   *
+   * Der Weg ist derselbe, dessen sich HACS fuer seine Knöpfe bedient:
+   * Adresse in die Geschichte legen und das Router-Ereignis feuern --
+   * das Frontend haelt die Leiste, das Panel wird abgebaut. Gelingt
+   * das Ereignis nicht (kaum denkbar), faellt die Zeile auf die gute
+   * alte Ganze-Seite-Weiterleitung zurueck.
+   */
+  _gehe(ziel) {
+    try {
+      window.history.pushState(null, "", ziel);
+      window.dispatchEvent(new Event("location-changed"));
+    } catch (fehler) {
+      window.location.assign(ziel);
+    }
+  }
+
+  /** Die Liste laden -- der schnelle Griff aus dem Lager (kein Netzruf). */
   async _lade() {
     if (!this._hass) return;
     this._beschaeftigt = true;
@@ -913,11 +991,17 @@ class HacsLabPanel extends HTMLElement {
       </div>`;
   }
 
-  /** Der Laden: Werkzeugleiste, Instanz-Meldung, Abschnitte. */
+  /** Der Laden: Werkzeugleiste, Instanz-Plaettchen, Meldung, Abschnitte. */
   _html_laden() {
     const t = this._t;
     if (!this._instanzen.length) {
-      return `<div class="hl-hinweis">${fliehe(t.instanzen_leer)}</div>`;
+      return `
+        <div class="hl-hinweis">
+          <div>${fliehe(t.instanzen_leer)}</div>
+          <button class="hl-knopf hl-primaer hl-hinweis-knopf" data-aktion="instanz_hinzu">
+            ${fliehe(t.erste_instanz)}
+          </button>
+        </div>`;
     }
     const gruppen = this._gruppen();
     const gesamt =
@@ -939,6 +1023,16 @@ class HacsLabPanel extends HTMLElement {
           </select>
         </label>
         <span class="hl-zaehler-zeile">${fliehe(t.anzahl(gesamt))}${stand_zeile}${this._beschaeftigt ? ` · ${fliehe(t.frisch_laeuft)}` : ""}</span>
+      </div>
+      <div class="hl-instanzzeile">
+        <span class="hl-instanzwort">${fliehe(t.instanzen_titel)}</span>
+        ${this._instanzen
+          .map(
+            (h) =>
+              `<button class="hl-instanz" data-aktion="instanz" title="${fliehe(t.instanz_verwalten)}">${SERVER_SVG}<span>${fliehe(h)}</span></button>`
+          )
+          .join("")}
+        <button class="hl-instanz hl-instanz-neu" data-aktion="instanz_hinzu" title="${fliehe(t.instanz_hinzufuegen)}">${PLUS_SVG}<span>${fliehe(t.instanz_hinzufuegen)}</span></button>
       </div>`;
     const meldung = Object.keys(this._instanz_fehler).length
       ? `<div class="hl-banner">${WARN_SVG}<span>${fliehe(
@@ -1001,21 +1095,25 @@ class HacsLabPanel extends HTMLElement {
       </div>`;
   }
 
-  /** Das Zeichen einer Karte: Bild, oder Buchstabe statt kaputtem Bild. */
+  /** Das Zeichen einer Karte: Bild, oder farbiger Buchstabe (GitLab). */
   _avatar_html(zeile) {
     const name = String(zeile.name || zeile.full_name || "?").trim();
     const bloss = name.replace(/[*](lab|forge)$/i, "");
     const buchstabe = fliehe(
       (bloss.charAt(0) || "?").toUpperCase()
     );
+    const farbe = zeichen_farbe(bloss || name);
     const adresse = String(zeile.avatar_url || "");
     if (adresse && adresse_ok(adresse)) {
       return (
         `<img class="hl-avatar" src="${fliehe(adresse)}" alt="" loading="lazy"` +
-        ` data-buchstabe="${buchstabe}">`
+        ` data-buchstabe="${buchstabe}" data-farbe="${farbe}">`
       );
     }
-    return `<span class="hl-avatar hl-avatar-buchstabe" aria-hidden="true">${buchstabe}</span>`;
+    return (
+      `<span class="hl-avatar hl-avatar-buchstabe" style="background:${farbe};` +
+      `color:${ZEICHEN_SCHRIFT}" aria-hidden="true">${buchstabe}</span>`
+    );
   }
 
   _html_zeile_eintrag(e) {
@@ -1176,12 +1274,15 @@ class HacsLabPanel extends HTMLElement {
 
     // Ein Zeichen, das nicht kommen will, wird zum Buchstaben -- nie
     // zum kaputten Bild (Flug 2084). Der Fallback sitzt als Zuhoerer,
-    // nicht als Inline-Attribut: CSP laesst Inline-Handler kalt.
+    // nicht als Inline-Attribut: CSP laesst Inline-Handler kalt. Seit
+    // Flug 2085 traegt er dieselbe Farbe wie von Anfang an.
     for (const bild of $$(".hl-avatar[data-buchstabe]")) {
       bild.addEventListener("error", () => {
         const ersatz = document.createElement("span");
         ersatz.className = "hl-avatar hl-avatar-buchstabe";
         ersatz.setAttribute("aria-hidden", "true");
+        ersatz.style.background = bild.dataset.farbe || "";
+        ersatz.style.color = ZEICHEN_SCHRIFT;
         ersatz.textContent = bild.dataset.buchstabe || "?";
         bild.replaceWith(ersatz);
       });
@@ -1221,6 +1322,13 @@ class HacsLabPanel extends HTMLElement {
           );
           const kategorie = wahl ? wahl.value : "integration";
           this._hinzufuegen(knopf.dataset.host, knopf.dataset.pfad, kategorie);
+        } else if (aktion === "instanz") {
+          // Plättchen: zu den Einstellungen der Integration -- dort stehen
+          // Abstand, Custom Repositories und Entfernen je Instanz.
+          this._gehe("/config/integrations/integration/hacs_lab");
+        } else if (aktion === "instanz_hinzu") {
+          // Die nächste Domain: der Einrichtungsdialog, Domain vorbelegt.
+          this._gehe("/config/integrations/dashboard/add?domain=hacs_lab");
         }
       });
     }
@@ -1332,6 +1440,25 @@ const STIL = `
 .hl-warn { width: 15px; height: 15px; color: var(--hl-gold);
   flex: 0 0 auto; margin-top: 1px; }
 .hl-hinweis { opacity: .7; padding: 24px 0; text-align: center; font-size: 14px; }
+.hl-hinweis-knopf { margin-top: 14px; }
+
+/* -- Die Instanz-Plaettchen (Flug 2085): endlos viele Server */
+.hl-instanzzeile { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 0 0 12px; }
+.hl-instanzwort { font-size: 12.5px; color: var(--secondary-text-color);
+  flex: 0 0 auto; }
+.hl-instanz { display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid rgba(127, 127, 127, .4); border-radius: 999px;
+  background: var(--card-background-color, #fff); color: var(--primary-text-color);
+  padding: 4px 12px 4px 9px; font: inherit; font-size: 12.5px; cursor: pointer;
+  max-width: 100%; }
+.hl-instanz span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-instanz svg { width: 13px; height: 13px; flex: 0 0 auto;
+  color: var(--secondary-text-color); }
+.hl-instanz:hover { border-color: var(--hl-orange); }
+.hl-instanz:hover svg { color: var(--hl-orange); }
+.hl-instanz-neu { border-style: dashed; }
+.hl-instanz-neu svg { width: 12px; height: 12px; }
 .hl-werkzeug { display: flex; align-items: center; gap: 12px; padding: 4px 0 12px;
   flex-wrap: wrap; }
 .hl-sortierung { display: flex; align-items: center; gap: 8px;
@@ -1380,7 +1507,9 @@ const STIL = `
 .hl-karte:hover { border-color: rgba(127, 127, 127, .6); }
 .hl-karte.schon-da { opacity: .55; }
 
-/* -- Das Zeichen der Karte (Flug 2084): Bild oder Buchstabe */
+/* -- Das Zeichen der Karte (Flug 2084): Bild oder Buchstabe.
+   Flug 2085: ohne Bild traegt der Buchstabe GitLabs Pastell -- die
+   Farbe kommt von der Karte (inline), die Klasse bleibt das Layout. */
 .hl-avatar { width: 38px; height: 38px; border-radius: 6px; flex: 0 0 auto;
   object-fit: cover; background: var(--card-background-color, #fff); }
 .hl-avatar-buchstabe { display: inline-flex; align-items: center; justify-content: center;

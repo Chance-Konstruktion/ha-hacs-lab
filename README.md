@@ -85,13 +85,26 @@ by hand. It takes about two minutes.
 
 ## Using HACS*lab
 
+> **Handbuch:** the [project wiki](https://gitlab.schanz.ipv64.net/chance-konstruktion/
+> hacs-lab/-/wikis/Home) explains everything in depth, in German —
+> installation, adding providers (as many GitLab servers as you like),
+> settings, the store, repository-owner instructions, and a
+> troubleshooting page.
+
 - **The panel:** one page, collapsible sections like the HACS store —
   *Updatable*, *Installed*, *New* (scan findings), *Downloadable* —
   each header counting its cards. The top bar follows your GitLab:
   tanuki mark, a "Search or go to …" field, refresh and add tools,
   breadcrumbs in the detail view. Cards carry their project's avatar
-  (or a letter when a project has none). Names follow your theme's
-  text colour — white in dark mode, black in light mode.
+  (or a letter in GitLab's pastel colours when a project has none).
+  Names follow your theme's text colour — white in dark mode, black in
+  light mode.
+- **Unlimited servers:** every GitLab instance is one config entry —
+  set up as many as you like, each with its own token and interval.
+  The store shows them all as clickable instance chips (leading to
+  their settings) with a dashed "+ Add instance" button that opens
+  the setup dialog for the next domain. The empty store's first-run
+  hint carries the same button.
 - **Never an empty store:** the list lives in the *Lager*, a per-instance
   cache in Home Assistant's storage (`hacs_lab.lager.<host>`). Opening
   the panel paints from that cache instantly (no network round-trip),
