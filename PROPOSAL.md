@@ -1,156 +1,164 @@
-# A second provider for HACS — a proposal
+# Ein zweiter Anbieter für HACS — ein Vorschlag
 
-> This document is the outward-facing write-up of the forge seam that
-> HACS*lab runs on. It is aimed at the people maintaining
-> [HACS](https://github.com/hacs/integration). The decision whether to
-> actually submit this upstream belongs to the repository owner — this
-> document is the material for that decision, not the decision itself.
+> Dieses Dokument ist die nach außen gerichtete Ausarbeitung der Forge-Naht,
+> auf der HACS\*lab läuft. Es wendet sich an die Leute, die
+> [HACS](https://github.com/hacs/integration) betreuen. Die Entscheidung, ob
+> er wirklich upstream eingereicht wird, gehört dem Besitzer des Repositories —
+> dieses Dokument ist das Material für diese Entscheidung, nicht die
+> Entscheidung selbst.
 >
-> Everything described here is implemented and tested in this repository,
-> against GitLab and Forgejo (reference instance: codeberg.org), with
-> recorded, byte-exact response fixtures in `tests/`.
+> Alles hier Beschriebene ist in diesem Repository umgesetzt und getestet,
+> gegen GitLab und Forgejo (Referenz-Instanz: codeberg.org), mit
+> aufgezeichneten, byte-genauen Antwort-Fixtures in `tests/`.
 
-## The one-sentence version
+## Die Fassung in einem Satz
 
-HACS talks to exactly one forge. We propose making that a *seam* — one
-small interface with one GitHub implementation — so that a second provider
-(GitLab, Forgejo) becomes an implementation, not a fork.
+HACS spricht genau eine Forge an. Wir schlagen vor, daraus eine *Naht* zu
+machen — eine kleine Schnittstelle mit einer GitHub-Implementierung —, damit
+ein zweiter Anbieter (GitLab, Forgejo) eine Implementierung wird, kein Fork.
 
-## Why this exists
+## Warum es das gibt
 
-Every Home Assistant user who keeps custom components on a GitLab or
-Forgejo instance today installs by hand and never hears about updates.
-There is no switch in HACS for a non-GitHub source; the source is woven
-into the machinery. The result is an ecosystem feature that only one forge
-can deliver — and a long history of forks that chase HACS releases and die.
+Jeder Home-Assistant-Nutzer, der heute Custom Components auf einer GitLab- oder
+Forgejo-Instanz hält, installiert von Hand und hört nie von Updates. Es gibt in
+HACS keinen Schalter für eine Nicht-GitHub-Quelle; die Quelle ist in die
+Maschinerie eingewoben. Das Ergebnis ist ein Ökosystem-Merkmal, das nur eine
+Forge liefern kann — und eine lange Geschichte von Forks, die HACS-Releases
+hinterherjagen und sterben.
 
-HACS*lab exists because we needed the feature *now*, without a fork. It
-runs alongside HACS as its own integration. In building it, the shape of
-the seam became clear — and that shape is what this proposal offers back.
+HACS\*lab existiert, weil wir das Merkmal *jetzt* brauchten, ohne Fork. Es läuft
+als eigene Integration neben HACS. Beim Bauen wurde die Form der Naht klar —
+und genau diese Form ist es, die dieser Vorschlag zurückgibt.
 
-## The seam
+## Die Naht
 
-Eight methods. That is the whole provider surface behind which all forge
-knowledge lives:
+Acht Methoden. Das ist die ganze Anbieter-Fläche, hinter der alles
+Forge-Wissen wohnt:
 
-| Method | What it answers | GitHub equivalent |
+| Methode | Was sie beantwortet | GitHub-Entsprechung |
 |---|---|---|
-| `repository(path)` | master data for `owner/name` | `GET /repos/{owner}/{repo}` |
-| `repository_by_id(id)` | master data by stable provider ID | `GET /repositories/{id}` |
-| `releases(path)` | published versions, newest first | `GET /repos/…/releases` |
-| `tags(path)` | tags as a fallback when no releases exist | `GET /repos/…/tags` |
-| `file(path, name, ref)` | one file's content at a ref | `GET /repos/…/contents/…` |
-| `archive(path, ref)` | the source archive of a version | codeload zip |
-| `archive_url(path, ref)` | the archive's address (for humans, browsers) | — |
-| `search_by_topic(topic, group, subgroups)` | everything the owners tagged | search + `topic:` qualifier |
+| `repository(path)` | Stammdaten für `owner/name` | `GET /repos/{owner}/{repo}` |
+| `repository_by_id(id)` | Stammdaten über die stabile Anbieter-ID | `GET /repositories/{id}` |
+| `releases(path)` | veröffentlichte Versionen, neueste zuerst | `GET /repos/…/releases` |
+| `tags(path)` | Tags als Rückfall, wenn es keine Releases gibt | `GET /repos/…/tags` |
+| `file(path, name, ref)` | den Inhalt einer Datei an einem Ref | `GET /repos/…/contents/…` |
+| `archive(path, ref)` | das Quell-Archiv einer Version | codeload-ZIP |
+| `archive_url(path, ref)` | die Adresse des Archivs (für Menschen, Browser) | — |
+| `search_by_topic(topic, group, subgroups)` | alles, was die Besitzer getaggt haben | Suche + `topic:`-Filter |
 
-Two dataclasses cross the seam: `RepositoryInfo` (identity, description,
-topics, stars, archive flag, web/ticket/release URLs) and `Release` (tag,
-name, notes, date, prerelease flag, assets). A `NotFound` exception means
-"gone or insufficient access"; everything else is a plain forge error. The
-core of HACS*lab knows no status codes, no HTTP library, and no
-`if provider == "gitlab"` — a guard job in CI fails the build on any
-provider special case outside the provider class.
+Zwei Datenklassen überqueren die Naht: `RepositoryInfo` (Identität,
+Beschreibung, Topics, Sterne, Archiv-Flag, Web/Ticket/Release-URLs) und
+`Release` (Tag, Name, Notizen, Datum, Prerelease-Flag, Assets). Eine
+`NotFound`-Ausnahme heißt „weg oder Rechte fehlen“; alles andere ist ein
+schlichter Forge-Fehler. Der Kern von HACS\*lab kennt keine Status-Codes, keine
+HTTP-Bibliothek und kein `if provider == "gitlab"` — ein Wächter-Job in der CI
+kippt den Bau bei jedem Anbieter-Sonderfall außerhalb der Anbieterklasse.
 
-## The identity rule that makes it durable
+## Die Identitäts-Regel, die es haltbar macht
 
-A repository is **not** its name. It is provider + host + provider ID. The
-name is display. Projects get renamed; paths get reused; an entry keyed on
-`owner/name` breaks silently exactly when the user is not looking. Keyed
-on the ID, a rename is an event, not a loss: the next heartbeat asks
-`repository_by_id`, gets the new name, and follows it — entities and
-installed state stay put. (This is implemented and tested; it is the
-single most valuable thing we learned.)
+Ein Repository ist **nicht** sein Name. Es ist Anbieter + Host + Anbieter-ID.
+Der Name ist Anzeige. Projekte werden umbenannt; Pfade werden wiederverwendet;
+ein an `owner/name` aufgehängter Eintrag bricht still, genau wenn der Nutzer
+nicht hinschaut. Auf die ID aufgehängt, ist eine Umbenennung ein Ereignis,
+kein Verlust: Der nächste Herzschlag fragt `repository_by_id`, bekommt den
+neuen Namen und folgt ihm — Entities und Installations-Zustand bleiben, wo
+sie sind. (Das ist umgesetzt und getestet; es ist das Wertvollste, was wir
+gelernt haben.)
 
-The display name carries the provider as a suffix — `foo/bar*lab` for
-GitLab — generated by HACS*lab only, never written back to the forge. Two
-repositories with the same name on different forges coexist without
-colliding, and a GitHub repository that happens to end in `-lab` is never
-confused with one: the source is a field in the record, not part of the
-string.
+Der Anzeige-Name trägt den Anbieter als Nachsilbe — `foo/bar*lab` für GitLab —,
+nur von HACS\*lab erzeugt, nie zur Forge zurückgeschrieben. Zwei Repositories
+mit demselben Namen auf verschiedenen Forges koexistieren, ohne sich zu
+stoßen, und ein GitHub-Repository, das zufällig auf `-lab` endet, wird nie mit
+einem verwechselt: Die Quelle ist ein Feld im Datensatz, kein Teil der
+Zeichenkette.
 
-## Validation is content, not intent
+## Validierung ist Inhalt, nicht Absicht
 
-A topic is an announcement; metadata is a claim. HACS*lab treats both as
-inputs, not verdicts: every candidate from discovery goes through content
-validation — `hacs.json` must parse and be an object, forbidden keys
-rejected, `manifest.json` must be structurally sound (domain, name,
-version, codeowners), the version must exist before an update is offered.
-The acceptance idea transfers directly: an upstream HACS that grows a
-second provider will want the same validation in front of every install,
-because a forge it does not control will eventually serve garbage.
+Ein Topic ist eine Ansage; Metadaten sind eine Behauptung. HACS\*lab behandelt
+beides als Eingaben, nicht als Urteile: Jeder Kandidat aus der Entdeckung geht
+durch Inhalts-Validierung — `hacs.json` muss parsen und ein Objekt sein,
+verbotene Schlüssel werden abgelehnt, `manifest.json` muss strukturell gesund
+sein (Domain, Name, Version, Codeowners), die Version muss existieren, bevor
+ein Update angeboten wird. Die Abnahme-Idee überträgt sich direkt: Ein
+upstream-HACS, das einen zweiten Anbieter wachsen lässt, wird dieselbe
+Validierung vor jeder Installation wollen — weil eine Forge, die er nicht
+kontrolliert, irgendwann Mühl liefert.
 
-## What HACS would have to change
+## Was HACS ändern müsste
 
-1. **Route all repository access through the seam.** The eight methods
-   above, one `GitHubForge` implementation. Existing behaviour stays
-   byte-identical; the change is mechanical, and the guard against
-   special-casing is a CI grep.
-2. **Key the store on provider + host + ID, display the name.** A
-   migration of the existing store is a one-time ID fetch per entry.
-3. **Accept an optional provider/instance on custom repositories.** The
-   UI question — "paste a URL, we detect the forge" — is exactly what
-   HACS*lab's setup dialog already does (a pasted project link is
-   shortened to its host).
-4. **Keep discovery per-forge.** GitHub topics are the existing
-   mechanism; GitLab has topics, Forgejo has topics. `search_by_topic`
-   is the seam, and each forge answers it honestly.
+1. **Jeden Repository-Zugriff durch die Naht leiten.** Die acht Methoden
+   oben, eine `GitHubForge`-Implementierung. Das heutige Verhalten bleibt
+   byte-identisch; die Änderung ist mechanisch, und der Wächter gegen
+   Sonderfälle ist ein CI-Grep.
+2. **Den Laden auf Anbieter + Host + ID aufhängen, den Namen anzeigen.** Eine
+   Migration des bestehenden Ladens ist ein einmaliger ID-Abruf je Eintrag.
+3. **Bei Custom Repositories einen optionalen Anbieter/eine Instanz
+   akzeptieren.** Die UI-Frage — „URL einfügen, wir erkennen die Forge“ — ist
+   genau das, was der Einrichtungs-Dialog von HACS\*lab schon tut (ein
+   eingefügter Projekt-Link wird auf seinen Host gekürzt).
+4. **Entdeckung je Forge belassen.** GitHub-Topics sind der bestehende
+   Mechanismus; GitLab hat Topics, Forgejo hat Topics. `search_by_topic` ist
+   die Naht, und jede Forge beantwortet sie ehrlich.
 
-What HACS would *not* have to change: category handling, the download
-conventions (`content_in_root`, `zip_release`, `filename`), the update
-machinery, the store format of entries beyond the identity key.
+Was HACS *nicht* ändern müsste: Kategorie-Behandlung, die Download-Konventionen
+(`content_in_root`, `zip_release`, `filename`), die Update-Maschinerie, das
+Laden-Format der Einträge jenseits des Identitäts-Schlüssels.
 
-## What we deliberately left out
+## Was wir bewusst weggelassen haben
 
-- **No write access to any forge.** The interface is read-only. Stars,
-  issues, releases: never written.
-- **No curated catalog.** The default HACS catalog lives on GitHub as
-  curated content; a second provider's catalog is a policy question, not
-  a seam question. We work with custom repositories and topic discovery.
-- **No rate-limit harmonisation.** Each forge has its own limits and
-  its own ETag behaviour. The seam keeps provider knowledge inside the
-  provider class; harmonising quotas is out of scope.
-- **No packaging of HACS itself.** HACS*lab is not a HACS distribution
-  and does not intend to become one.
+- **Kein Schreib-Zugriff auf irgendeine Forge.** Die Schnittstelle ist
+  nur lesend. Sterne, Issues, Releases: nie geschrieben.
+- **Kein kuratierter Katalog.** Der Standard-Katalog von HACS lebt auf GitHub
+  als kuratierter Inhalt; der Katalog eines zweiten Anbieters ist eine
+  Frage der Ordnungspolitik, keine Frage der Naht. Wir arbeiten mit Custom
+  Repositories und Topic-Entdeckung.
+- **Keine Rate-Limit-Gleichschaltung.** Jede Forge hat eigene Limits und
+  eigenes ETag-Verhalten. Die Naht hält Anbieter-Wissen in der
+  Anbieterklasse; Kontingente gleichzuschalten steht außerhalb.
+- **Keine Auslieferung von HACS selbst.** HACS\*lab ist keine
+  HACS-Distribution und will keine werden.
 
-## Costs and risks, honestly
+## Kosten und Risiken, ehrlich
 
-- **Maintenance.** A second provider is a permanent second set of
-  recorded fixtures, API quirks, and breakage reports. The seam keeps
-  the blast radius small (one file per provider), but the area is
-  nonzero forever.
-- **Divergence.** GitLab's archive endpoints, topic search, and release
-  assets differ from GitHub's in detail. We normalise at the seam
-  (GitLab tag archives wrap content in a root folder — the seam's
-  archive consumers handle exactly one such convention per provider).
-- **Security surface.** Installing from a forge you do not control
-  raises the stakes for unpacking. We treat that as non-negotiable:
-  path-escape, size, count, and symlink guards with four malicious
-  test archives in the suite, staged installs with atomic switch and
-  rollback. An upstream adoption should require no less.
-- **Identity is the hard part, not the plumbing.** The API calls are
-  easy. The store migration and the "rename is an event" semantics are
-  where the design effort went — and where the value is.
+- **Pflege.** Ein zweiter Anbieter ist für immer ein zweiter Satz
+  aufgezeichneter Fixtures, API-Eigenheiten und Bruchberichte. Die Naht hält
+  den Wirkungskreis klein (eine Datei je Anbieter), aber die Fläche ist für
+  immer nicht null.
+- **Auseinanderlaufen.** GitLabs Archiv-Endpunkte, Topic-Suche und
+  Release-Assets weichen im Detail von GitHubs ab. Wir glätten an der Naht
+  (GitLab-Tag-Archive hüllen den Inhalt in einen Wurzelordner — die
+  Archiv-Verbraucher der Naht beherrschen je Anbieter genau so eine
+  Konvention).
+- **Sicherheits-Fläche.** Aus einer Forge zu installieren, die man nicht
+  kontrolliert, erhöht die Anforderungen ans Entpacken. Wir behandeln das
+  als unverhandelbar: Wächter gegen Pfad-Flucht, Größe, Anzahl und Symlinks
+  mit vier böswilligen Test-Archiven in der Suite, Installationen erst
+  aufgebaut, dann atomar gewechselt, bei Scheitern zurückgerollt. Eine
+  upstream-Übernahme sollte nicht weniger verlangen.
+- **Identität ist der harte Teil, nicht die Verrohrung.** Die API-Aufrufe
+  sind leicht. Die Laden-Migration und die Semantik „Umbenennung ist ein
+  Ereignis“ sind dort, wo die Entwurfs-Arbeit hinging — und wo der Wert liegt.
 
-## Two ways this can go
+## Zwei Wege, wie es laufen kann
 
-**Submitted upstream.** The seam description above, the identity rule,
-and the validation stance are the parts worth taking. The code is not a
-drop-in (different licence heritages, different internal structures) —
-but the design is a working, tested existence proof from two live
-providers.
+**Upstream eingereicht.** Die Naht-Beschreibung oben, die Identitäts-Regel und
+die Validierungs-Haltung sind die Teile, die sich zu übernehmen lohnen. Der
+Code ist kein Einsetzen (andre Lizenz-Herkünfte, andre innere Strukturen) —
+aber der Entwurf ist ein arbeitender, getesteter Existenz-Beweis aus zwei
+lebenden Anbietern.
 
-**Standalone, permanently.** HACS*lab stays a lean companion integration
-beside HACS. That is a smaller ecosystem contribution but a
-zero-coordination one: it works today, against real GitLab and Codeberg
-instances, and nothing about it blocks on upstream's roadmap.
+**Eigenständig, dauerhaft.** HACS\*lab bleibt eine schlanke
+Begleit-Integration neben HACS. Das ist der kleinere Ökosystem-Beitrag, aber
+einer ohne jede Abstimmung: Er funktioniert heute, gegen echte GitLab- und
+Codeberg-Instanzen, und nichts an ihm wartet auf die Fahrkarte von upstream.
 
-The repository owner decides. Both futures are honest.
+Der Besitzer des Repositories entscheidet. Beide Zukünfte sind ehrlich.
 
 ---
 
-*This document is part of HACS*lab milestone M10 ("Nach draussen"). The
-German engineering docs — [ARCHITEKTUR.md](ARCHITEKTUR.md) for the four
-structural decisions, [ROADMAP.md](ROADMAP.md) for milestones and
-acceptance tests — carry the full reasoning behind everything claimed
-here.*
+*Dieses Dokument gehört zum HACS\*lab-Meilenstein M10 („Nach draußen“). Die
+Entwicklungs-Dokumentation — [ARCHITEKTUR.md](ARCHITEKTUR.md) für die fünf
+Struktur-Entscheidungen, [ROADMAP.md](ROADMAP.md) für Meilensteine und
+Abnahmen — trägt das ganze Denken hinter allem, was hier behauptet wird. Die
+englische Fassung dieses Vorschlags gehört zum späteren GitHub-Auftritt und
+liegt bis dahin in der Git-Geschichte verwahrt.*

@@ -1,274 +1,289 @@
 # HACS*lab
 
-HACS behaviour for self-hosted Git forges: add, discover, and update Home
-Assistant custom components that live on **GitLab**, **Gitea**, or **Forgejo**
-([Codeberg](https://codeberg.org)) — the way HACS does it for GitHub.
+HACS-Verhalten für selbst gehostete Git-Forges: Home-Assistant-Custom-Components,
+die auf **GitLab**, **Gitea** oder **Forgejo** ([Codeberg](https://codeberg.org))
+leben, hinzufügen, entdecken und aktuell halten — so, wie HACS es für GitHub tut.
 
-**Not a fork.** HACS*lab is its own Home Assistant integration that runs
-*alongside* HACS. We change no HACS code and copy none. There is a reason:
-a fork would have to chase every HACS release, and nobody but us would ever
-use it.
+**Kein Fork.** HACS\*lab ist eine eigene Home-Assistant-Integration, die *neben*
+HACS läuft. Wir ändern keinen HACS-Code und kopieren keinen. Das hat einen
+Grund: Ein Fork müsste jedem HACS-Release hinterherjagen, und niemand außer uns
+würde ihn je benutzen.
 
-## The problem
+## Das Problem
 
-HACS knows exactly one source: GitHub. A custom repository with a GitLab
-address is rejected; there is no switch for it. If your integrations live on
-your own — or any other — GitLab, Gitea, or Forgejo instance, you install
-by hand and never learn that a new version exists.
+HACS kennt genau eine Quelle: GitHub. Ein Custom Repository mit GitLab-Adresse
+wird abgelehnt; es gibt dafür keinen Schalter. Wohnen deine Integrationen auf
+einer eigenen — oder irgendeiner anderen — GitLab-, Gitea- oder
+Forgejo-Instanz, installierst du von Hand und erfährst nie, dass es eine neue
+Version gibt.
 
-HACS*lab closes that gap. It speaks to all three families directly: it finds
-repositories tagged for discovery, reads their metadata, compares versions,
-downloads the version archive, and installs it safely.
+HACS\*lab schließt diese Lücke. Es spricht alle drei Familien direkt an: Es
+findet Repositories mit dem Entdeckungs-Topic, liest ihre Metadaten, vergleicht
+Versionen, lädt das Versions-Archiv herunter und installiert es sicher.
 
 ## Installation
 
-HACS cannot deliver HACS*lab — it only knows GitHub — so the honest way is
-by hand. It takes about two minutes.
+HACS kann HACS\*lab nicht liefern — es kennt nur GitHub —, also ist der ehrliche
+Weg der von Hand. Er dauert etwa zwei Minuten.
 
-**Requirements**
+**Voraussetzungen**
 
-- Home Assistant 2025.2 or newer (the test lane runs against 2026.2)
-- A GitLab, Gitea, or Forgejo (Codeberg) instance you can reach from your
-  Home Assistant host
-- Optional: a read token — for private repositories or to be gentler on
-  rate limits (GitLab `read_api` scope; a Gitea/Forgejo token with read
-  access)
+- Home Assistant 2025.2 oder neuer (die Test-Bahn läuft gegen 2026.2)
+- Eine GitLab-, Gitea- oder Forgejo-Instanz (Codeberg), die du vom
+  Home-Assistant-Host aus erreichen kannst
+- Optional: ein Lese-Token — für private Repositories oder um sanfter mit
+  Rate-Limits umzugehen (GitLab-Scope `read_api`; ein Gitea/Forgejo-Token mit
+  Leserecht)
 
-**Steps**
+**Schritte**
 
-1. Download the release archive `hacs-lab-vX.Y.Z.zip` from the
-   [releases page](https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/releases).
-   The SHA-256 of the archive is part of every release description — verify
-   it if you like. The archive link points into this GitLab's package
-   registry; the project is internal, so downloading needs an account on the
-   instance.
-2. Extract the archive **into your Home Assistant configuration directory**
-   (the one that contains `configuration.yaml`). The archive contains a
-   single folder, `custom_components/hacs_lab/` — core library included.
-   One folder to copy, nothing else to set up; the integration finds its
-   core through relative imports, so it never touches your Python path.
-3. Restart Home Assistant.
-4. Add the integration: *Settings → Devices & Services → Add Integration*,
-   search for **HACS*lab**. Enter the host of your instance (a pasted
-   project link is shortened to its host) and, optionally, your read token.
-   The provider stays on **auto** for most cases — HACS*lab asks the
-   instance itself which API it speaks (works for gitlab.com, codeberg.org,
-   gitea.com, and self-hosted servers alike); pick GitLab, Forgejo, or Gitea
-   by hand only if auto-detection cannot decide. The dialog checks the
-   connection and tells you plainly when it fails.
-   Several instances sit side by side — one per host, each with its own
-   provider, token, and entries.
-5. After setup you get a sidebar panel — no YAML anywhere. The sidebar
-   entry wears the GitLab tanuki, served by the integration itself
-   (`frontend/iconset.js`, registered on every frontend page).
+1. Lade das Release-Archiv `hacs-lab-vX.Y.Z.zip` von der
+   [Release-Seite](https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/releases)
+   herunter. Die SHA-256 des Archivs steht in jeder Release-Beschreibung —
+   prüfe sie, wenn du magst. Der Archiv-Link zeigt in die Package-Registry
+   dieses GitLab; das Projekt ist intern, der Download braucht also einen
+   Account auf der Instanz.
+2. Entpacke das Archiv **in dein Home-Assistant-Konfigurationsverzeichnis**
+   (das mit der `configuration.yaml`). Das Archiv enthält genau einen Ordner,
+   `custom_components/hacs_lab/` — Kern-Bibliothek inklusive. Ein Ordner zum
+   Kopieren, weiter nichts einzurichten; die Integration findet ihren Kern über
+   relative Imports und fasst deinen Python-Pfad nie an.
+3. Starte Home Assistant neu.
+4. Integration hinzufügen: *Einstellungen → Geräte & Dienste → Integration
+   hinzufügen*, nach **HACS\*lab** suchen. Trage den Host deiner Instanz ein
+   (ein eingefügter Projekt-Link wird auf seinen Host gekürzt) und optional
+   dein Lese-Token. Der Anbieter bleibt in den meisten Fällen auf **auto** —
+   HACS\*lab fragt die Instanz selbst, welche API sie spricht (funktioniert
+   bei gitlab.com, codeberg.org, gitea.com und selbst gehosteten Servern
+   gleichermaßen); wähle GitLab, Forgejo oder Gitea von Hand, nur falls die
+   Auto-Erkennung nicht entscheiden kann. Der Dialog prüft die Verbindung und
+   sagt dir klipp und klar, wenn sie scheitert.
+   Mehrere Instanzen sitzen Seite an Seite — eine je Host, jede mit eigenem
+   Anbieter, Token und Einträgen.
+5. Nach der Einrichtung bekommst du ein Seitenleisten-Panel — nirgendwo YAML.
+   Der Seitenleisten-Eintrag trägt den GitLab-Tanuki, geliefert von der
+   Integration selbst (`frontend/iconset.js`, auf jeder Frontend-Seite
+   registriert).
 
-> The setup dialog and the panel speak German and English — Home
-> Assistant picks the language, the integration ships both
+> Der Einrichtungs-Dialog und das Panel sprechen Deutsch und Englisch —
+> Home Assistant wählt die Sprache, die Integration liefert beide mit
 > (`translations/de.json`, `translations/en.json`).
 
-> **Upgrading from v0.1.0?** That archive shipped an import layout that
-> breaks the setup dialog with `No module named 'hacs_lab'` — the config
-> flow reached for a top-level package that Home Assistant never
-> provides. Remove **both** leftovers from your configuration directory
-> first: `custom_components/hacs_lab/` **and** the stray top-level
-> `hacs_lab/` folder the old archive dropped next to it. Then extract a
-> current archive (one folder, core included) and restart. Since v0.1.1
-> the integration also carries an icon in the settings page
-> (`mdi:gitlab`); `logo.png` and `original.png` in this repository are
-> the brand artwork — the demonic GitLab fox taking over the Home
-> Assistant house: HA blue, a white home, and a tanuki in ember colors
-> with burning GitLab seams whose claws dig into the facade.
+> **Umstieg von v0.1.0?** Dieses Archiv schleppte ein Import-Layout mit, das
+> den Einrichtungs-Dialog mit `No module named 'hacs_lab'` bricht — der
+> Config-Flow griff nach einem Paket auf oberster Ebene, das Home Assistant nie
+> bereitstellt. Räume zuerst **beide** Reste aus deinem
+> Konfigurationsverzeichnis: `custom_components/hacs_lab/` **und** den
+> verschlagenen Ordner `hacs_lab/` auf oberster Ebene, den das alte Archiv
+> daneben ablegte. Danach ein aktuelles Archiv entpacken (ein Ordner, Kern
+> inklusive) und neu starten. Seit v0.1.1 trägt die Integration auch ein Icon
+> auf der Einstellungsseite (`mdi:gitlab`); `logo.png` und `original.png` in
+> diesem Repository sind die Marken-Bilder — der dämonische GitLab-Fuchs, der
+> das Home-Assistant-Haus übernimmt: HA-Blau, ein weißes Haus und ein Tanuki
+> in Glutfarben mit brennenden GitLab-Nähten, dessen Krallen sich in die
+> Fassade graben.
 
-> **Upgrading from v0.1.1?** Extract the v0.2.0 archive over the old
-> folder and restart — same layout, nothing to clean up. What's new:
-> a repository in the plain HACS layout (`custom_components/<domain>/`
-> nested anywhere in its tag source archive) now installs **without a
-> prebuilt attachment** — HACS*lab finds the storage form itself
-> (issue #15) — and HACS*lab now accepts its own delivery form, so it
-> can keep itself up to date: add this repository to its own watch
-> list and the next release offers itself as an update.
+> **Umstieg von v0.1.1?** Entpacke das v0.2.0-Archiv über den alten Ordner und
+> starte neu — gleiches Layout, nichts zu säubern. Neu: Ein Repository im
+> schlichten HACS-Layout (`custom_components/<domain>/`, im Tag-Quell-Archiv
+> beliebig tief verschachtelt) installiert jetzt **ohne vorgebautes
+> Attachment** — HACS\*lab findet die Lagerform selbst (Issue #15) — und
+> HACS\*lab akzeptiert jetzt die eigene Lieferform, kann sich also selbst
+> aktuell halten: Nimm dieses Repository in die eigene Beobachtungsliste auf,
+> und das nächste Release bietet sich als Update an.
 
-## Using HACS*lab
+## HACS\*lab benutzen
 
-> **Handbuch / Manual:** the [project wiki](https://gitlab.schanz.ipv64.net/chance-konstruktion/
-> hacs-lab/-/wikis/Home) explains everything in depth, **in German and in
-> English** — installation, adding providers (as many servers as you like,
-> GitLab/Gitea/Forgejo in any mix), settings, the store, repository-owner
-> instructions, and a troubleshooting page.
+> **Handbuch:** das
+> [Projekt-Wiki](https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/wikis/Home)
+> erklärt alles in der Tiefe — Installation, Provider anbinden (so viele
+> Server, wie du magst, GitLab/Gitea/Forgejo in beliebiger Mischung),
+> Einstellungen, den Laden, die Anleitung für Repository-Besitzer und eine
+> Seite Fehlerbehebung.
 
-- **The panel:** one page, collapsible sections like the HACS store —
-  *Updatable*, *Installed*, *New* (search findings), *Downloadable* —
-  each header counting its cards. The top bar follows your GitLab:
-  tanuki mark, a "Search or go to …" field, refresh and add tools,
-  breadcrumbs in the detail view. That search field is the ONE search
-  (deliberately no second form under the sections): typing narrows
-  everything, **Enter** asks every configured instance directly — a
-  word with a slash is a group path, any other a keyword the provider
-  matches against name and description; the findings land in *New*,
-  and a word nobody knows simply yields an empty section instead of an
-  error. Cards carry their project's avatar
-  (or a letter in GitLab's pastel colours when a project has none).
-  Names follow your theme's text colour — white in dark mode, black in
-  light mode. While the first stock is still on its way, the panel shows
-  a Home Assistant-style loading card (spinner in your theme's primary
-  colour) instead of an empty store. Scroll to the very bottom and the
-  tanuki signs off the page: *"Made for freedom — no GitHub monopoly,
-  because one platform is a single point of failure."* (the German
-  theme keeps it blunt: *„Für die Freiheit gebaut — kein
-  GitHub-Monopol-Scheiß.“*) — the one-line footer, in your language,
-  with a fox that does a small dance when the pointer strokes it.
-- **Unlimited servers, any mix:** every instance is one config entry —
-  set up as many as you like, each with its own provider (GitLab,
-  Forgejo, Gitea), token, and interval. The store shows them all as
-  clickable instance chips — each labelled with its provider — with a
-  dashed "+ Add instance" button that opens the setup dialog for the
-  next domain. The empty store's first-run hint carries the same button.
-- **Never an empty store:** the list lives in the *Lager*, a per-instance
-  cache in Home Assistant's storage (`hacs_lab.lager.<host>`). Opening
-  the panel paints from that cache instantly (no network round-trip),
-  then runs the fresh check in the background and re-renders when it
-  lands. After a restart the cache is read while Home Assistant is
-  still booting; the first background run follows shortly, and the
-  same interval you set for the heartbeat keeps the cache fresh —
-  `hacs_lab_aktualisiert` events repaint the panel while it stays
-  open. The refresh button still forces a run at any time.
-- **Add a custom repository:** open the panel, choose *Add*, paste the
-  project URL, pick a category. HACS*lab reads the metadata, the version,
-  and offers the install.
-- **Discover:** repositories whose owner set the topic `hacs` on their
-  GitLab, Gitea, or Forgejo project show up in the panel's *New* section
-  — with description, stars, and the latest version. A second topic
-  (`hacs-plugin`, `hacs-theme`, …) fixes the category without asking.
-- **Updates:** every entry gets an update entity and a heartbeat whose
-  interval you can tune per entry. A new release or tag raises the update,
-  the install service swaps the files safely — staged in a temporary
-  directory first, then an atomic switch, rolled back on failure.
-- **Preferred source:** if a release carries exactly one ZIP attachment,
-  that built artifact is installed instead of the auto-generated tag
-  archive; anything ambiguous falls back to the archive. That fallback
-  understands the repository layout: it finds `custom_components/<domain>/`
-  at any depth and installs only that subtree — so the standard HACS
-  structure installs as-is, without a built attachment (issue #15).
-- **Uninstall & restart:** every entry with a recorded install also
-  uninstalls — the recorded target path is checked against the known
-  category roots, then removed in one move. Installing or uninstalling
-  an **integration** raises a repair-center hint to restart Home
-  Assistant (integrations only load at startup); the hint clears
-  itself once the restart happened.
-- **Robust stock:** a renamed project is recognised by its ID and the name
-  follows silently; a reachable-but-changed repository is reported, never
-  guessed; diagnostics never print your token in the clear.
+- **Das Panel:** eine Seite, einklappbare Bereiche wie im HACS-Laden —
+  *Aktualisierbar*, *Installiert*, *Neu* (Suchfunde), *Herunterladbar* —, jede
+  Überschrift zählt ihre Karten. Die obere Leiste folgt deinem GitLab:
+  Tanuki-Zeichen, ein Feld „Suchen oder springen zu …“, Werkzeuge zum
+  Auffrischen und Hinzufügen, Brotkrumen in der Detailansicht. Dieses Suchfeld
+  ist DIE eine Suche (bewusst kein zweites Formular unter den Bereichen):
+  Tippen grenzt alles ein, **Enter** fragt jede eingerichtete Instanz direkt —
+  ein Wort mit Schrägstrich ist ein Gruppen-Pfad, jedes andere ein
+  Schlüsselwort, das der Anbieter gegen Name und Beschreibung passt; die Funde
+  landen in *Neu*, und ein Wort, das niemand kennt, ergibt schlicht einen
+  leeren Bereich statt eines Fehlers. Karten tragen den Avatar ihres Projekts
+  (oder einen Buchstaben in GitLabs Pastellfarben, wenn ein Projekt keinen
+  hat). Namen folgen der Textfarbe deines Designs — weiß im Dunkelmodus,
+  schwarz im Hellmodus. Während der erste Bestand noch unterwegs ist, zeigt
+  das Panel eine Ladekarte im Home-Assistant-Stil (Dreher in der Akzentfarbe
+  deines Designs) statt eines leeren Ladens. Scrolle ganz nach unten, und der
+  Tanuki unterzeichnet die Seite: *„Made for freedom — no GitHub monopoly,
+  because one platform is a single point of failure.”* (das deutsche Design
+  bleibt derb: *„Für die Freiheit gebaut — kein GitHub-Monopol-Scheiß.“*) —
+  die einzeilige Fusszeile, in deiner Sprache, mit einem Fuchs, der einen
+  kleinen Tanz macht, wenn der Zeiger ihn streichelt.
+- **Grenzenlos Server, beliebige Mischung:** jede Instanz ist ein
+  Konfigurationseintrag — richte so viele ein, wie du magst, jede mit eigenem
+  Anbieter (GitLab, Forgejo, Gitea), Token und Takt. Der Laden zeigt sie alle
+  als klickbare Instanz-Chips — jeder mit seinem Anbieter beschriftet — mit
+  einem gestrichelten „+ Instanz hinzufügen“-Knopf, der den Einrichtungs-Dialog
+  für die nächste Domain öffnet. Derselbe Knopf sitzt im Erstlings-Hinweis des
+  leeren Ladens.
+- **Nie ein leerer Laden:** die Liste lebt im *Lager*, einem Zwischenspeicher
+  je Instanz im Home-Assistant-Speicher (`hacs_lab.lager.<host>`). Das Panel
+  zu öffnen malt sofort aus dem Lager (kein Netz-Umlauf), dann läuft die
+  frische Prüfung im Hintergrund und zeichnet neu, sobald sie landet. Nach
+  einem Neustart wird das Lager gelesen, während Home Assistant noch
+  hochfährt; der erste Hintergrundlauf folgt kurz darauf, und derselbe Takt,
+  den du für den Herzschlag eingestellt hast, hält das Lager frisch —
+  `hacs_lab_aktualisiert`-Ereignisse streichen das Panel neu, solange es
+  offen bleibt. Der Auffrischen-Knopf erzwingt einen Lauf jederzeit.
+- **Custom Repository hinzufügen:** Panel öffnen, *Hinzufügen* wählen, die
+  Projekt-URL einfügen, eine Kategorie wählen. HACS\*lab liest Metadaten und
+  Version und bietet die Installation an.
+- **Entdecken:** Repositories, deren Besitzer auf ihrem GitLab-, Gitea- oder
+  Forgejo-Projekt das Topic `hacs` gesetzt haben, erscheinen im Bereich *Neu*
+  des Panels — mit Beschreibung, Sternen und neuester Version. Ein zweites
+  Topic (`hacs-plugin`, `hacs-theme`, …) legt die Kategorie fest, ohne zu
+  fragen.
+- **Updates:** jeder Eintrag bekommt eine Update-Entity und einen Herzschlag,
+  dessen Takt du je Eintrag einstellen kannst. Ein neues Release oder Tag
+  hebt das Update, der Installations-Dienst tauscht die Dateien sicher — erst
+  im temporären Verzeichnis aufgebaut, dann ein atomarer Wechsel, bei
+  Scheitern zurückgerollt.
+- **Bevorzugte Quelle:** trägt ein Release genau ein ZIP-Attachment, wird
+  dieses gebaute Artefakt installiert statt des automatisch erzeugten
+  Tag-Archivs; alles Mehrdeutige fällt auf das Archiv zurück. Dieser Rückfall
+  versteht das Repository-Layout: Er findet `custom_components/<domain>/` auf
+  jeder Tiefe und installiert genau diesen Teilbaum — die normale
+  HACS-Struktur installiert sich also, wie sie ist, ohne gebautes Attachment
+  (Issue #15).
+- **Deinstallation & Neustart:** jeder Eintrag mit aufgezeichneter
+  Installation deinstalliert auch — der aufgezeichnete Zielpfad wird gegen die
+  bekannten Kategorie-Wurzeln geprüft und dann in einem Zug entfernt. Das
+  Installieren oder Deinstallieren einer **Integration** hebt einen
+  Reparatur-Zettel, Home Assistant neu zu starten (Integrationen laden nur
+  beim Start); der Zettel verschwindet von selbst, sobald der Neustart
+  passiert ist.
+- **Robuster Bestand:** ein umbenanntes Projekt wird an seiner ID erkannt, und
+  der Name folgt still; ein erreichbares, aber verändertes Repository wird
+  gemeldet, nie geraten; Diagnosen drucken dein Token nie im Klartext.
 
-## For repository owners
+## Für Repository-Besitzer
 
-To make a project findable and installable by HACS*lab (works the same on
-GitLab, Gitea, and Forgejo/Codeberg):
+Damit HACS\*lab ein Projekt findet und installieren kann (auf GitLab, Gitea
+und Forgejo/Codeberg gleichermaßen):
 
-1. Set the topic `hacs` under *Settings → General → Topics*.
-2. Put a valid `hacs.json` on the default branch. Minimal shape:
+1. Setze das Topic `hacs` unter *Einstellungen → Allgemein → Topics*.
+2. Lege ein gültiges `hacs.json` auf den Standard-Zweig. Kleinstform:
 
    ```json
    {
-     "name": "My integration",
+     "name": "Meine Integration",
      "render_readme": true,
      "homeassistant": "2025.2.0"
    }
    ```
 
-   Repositories with a different layout set `content_in_root`,
-   `zip_release`, or `filename` — the same conventions HACS established.
-3. Publish versions as releases, or at least as tags. Releases win; tags
-   are the fallback. No built artifact required: the auto-generated tag
-   archive is enough — HACS*lab recognises the `custom_components/<domain>/`
-   folder inside it and installs exactly that subtree, leaving repository
-   root files (README, CI config) out of the target. A release with a
-   built ZIP attachment (the domain folder as its root) stays the most
-   precise delivery and still wins when present.
+   Repositories mit anderem Layout setzen `content_in_root`, `zip_release`
+   oder `filename` — dieselben Konventionen, die HACS etabliert hat.
+3. Veröffentliche Versionen als Releases oder zumindest als Tags. Releases
+   gewinnen; Tags sind der Rückfall. Kein gebautes Artefakt nötig: das
+   automatisch erzeugte Tag-Archiv genügt — HACS\*lab erkennt den Ordner
+   `custom_components/<domain>/` darin und installiert genau diesen
+   Teilbaum; Dateien der Repository-Wurzel (README, CI-Konfiguration) bleiben
+   außen vor. Ein Release mit gebautem ZIP-Attachment (der Domain-Ordner als
+   Wurzel) bleibt die genaueste Lieferform und gewinnt weiterhin, wenn
+   vorhanden.
 
-`hacs-development` as a second topic marks a repository as a development
-state — it is only found when explicitly searched for.
+`hacs-development` als zweites Topic markiert ein Repository als
+Entwicklungs-Zustand — es wird nur gefunden, wenn ausdrücklich danach gesucht
+wird.
 
-## Safety
+## Sicherheit
 
-Installing code from a forge is a trust decision, not a technical one.
-HACS*lab takes the technical part seriously: version archives are unpacked
-with path-escape, size, count, and symlink guards — four malicious test
-archives (path traversal, giant file, symlink attack, zip bomb) are part of
-the test suite and must be rejected *before* anything is written. The
-integrity of an interrupted install never lies: staged first, switched
-atomically, rolled back on failure.
+Code von einer Forge zu installieren ist eine Vertrauensentscheidung, keine
+technische. HACS\*lab nimmt den technischen Teil ernst: Versions-Archive
+werden mit Wächtern gegen Pfad-Flucht, Größe, Anzahl und Symlinks entpackt —
+vier böswillige Test-Archive (Pfad-Traversal, Riesen-Datei, Symlink-Angriff,
+Zip-Bombe) gehören zur Testsuite und müssen abgelehnt werden, *bevor*
+irgendetwas geschrieben wird. Die Unversehrtheit einer abgebrochenen
+Installation lügt nie: erst aufgebaut, dann atomar gewechselt, bei Scheitern
+zurückgerollt.
 
-## Repository layout
+## Repository-Aufbau
 
 ```
-logo.png, original.png        brand artwork — the GitLab fox in the HA house
-hacs.json                     repository conventions for HACS*lab itself
-custom_components/hacs_lab/   the integration — thin Home Assistant layer
-  manifest.json               domain, version, config flow, icon
-  config_flow.py              setup dialog with connection check
-  lager.py                    the store cache: persisted list + scan,
-                              background interval, `hacs_lab_aktualisiert`
-  frontend/panel.js           the sidebar panel (no YAML) — GitLab-style
-  frontend/iconset.js         the tanuki as sidebar icon (own icon
-                              collection `hacs-lab`, on every page)
-  translations/               dialog texts
-  core/                       the core — pure Python, no Home Assistant,
-                              no network in tests; lives here since the
-                              delivery-form decision (issue #11)
-    forge.py                  the provider interface (GitLab, Forgejo, Gitea, …)
+logo.png, original.png        Marken-Bilder — der GitLab-Fuchs im HA-Haus
+hacs.json                     Repository-Konventionen für HACS*lab selbst
+custom_components/hacs_lab/   die Integration — dünne Home-Assistant-Schicht
+  manifest.json               Domain, Version, Config-Flow, Icon
+  config_flow.py              Einrichtungs-Dialog mit Verbindungsprüfung
+  lager.py                    der Laden-Cache: gehaltene Liste + Bestandslauf,
+                              Hintergrund-Takt, `hacs_lab_aktualisiert`
+  frontend/panel.js           das Seitenleisten-Panel (ohne YAML) — GitLab-Stil
+  frontend/iconset.js         der Tanuki als Seitenleisten-Icon (eigene
+                              Icon-Sammlung `hacs-lab`, auf jeder Seite)
+  translations/               Dialog-Texte
+  core/                       der Kern — reines Python, ohne Home Assistant,
+                              ohne Netz in den Tests; liegt hier seit der
+                              Entscheidung zur Lieferform (Issue #11)
+    forge.py                  die Anbieter-Schnittstelle (GitLab, Forgejo, Gitea, …)
     gitlab_forge.py           GitLab REST v4
-    forgejo_forge.py          Forgejo (Codeberg recordings)
-    gitea_forge.py            Gitea — the Forgejo sister (topic search)
-    schmiede.py               the forge factory + provider auto-detection
-    http_aiohttp.py           aiohttp-backed HttpClient (session passed in)
+    forgejo_forge.py          Forgejo (Codeberg-Aufzeichnungen)
+    gitea_forge.py            Gitea — die Forgejo-Schwester (Topic-Suche)
+    schmiede.py               die Schmiede-Fabrik + Anbieter-Auto-Erkennung
+    http_aiohttp.py           HttpClient auf aiohttp (Sitzung kommt von außen)
     validierung.py            hacs.json, manifest.json
-    versionen.py              version compare and update decision
-    entdeckung.py             topic → candidate → validation
-    entpacken.py              guarded unpacking, atomic install
-auslieferung/release_bauen.py deterministic release archive builder
-tests/                        core suite — pytest, no network
-tests_ha/                     Home Assistant lane — offline, on a test double
+    versionen.py              Versions-Vergleich und Update-Entscheidung
+    entdeckung.py             Topic → Kandidat → Validierung
+    entpacken.py              bewachtes Entpacken, atomare Installation
+auslieferung/release_bauen.py deterministischer Release-Archiv-Bau
+tests/                        Kern-Suite — pytest, ohne Netz
+tests_ha/                     Home-Assistant-Bahn — offline, am Prüf-Doppel
 ```
 
-## Development
+## Entwicklung
 
-Two lanes, one verdict: the core runs lean, the framework layer needs
+Zwei Bahnen, ein Urteil: der Kern läuft schlank, die Framework-Schicht braucht
 Home Assistant (Python 3.13, `requirements-ha.txt`).
 
 ```bash
-python -m pytest -q                       # core: no HA, no network
+python -m pytest -q                       # Kern: kein HA, kein Netz
 python -m pytest tests_ha -q -p pytest_homeassistant_custom_component
 ```
 
-The hardening suites (`*_hart.py` in both lanes) run the code against
-hostile input: UTF-8 BOM in `hacs.json` (Windows editors leave one),
-five-segment versions where `.10` must beat `.9`, search words that
-look like script injections, ten-thousand-character keywords, storage
-that is not what the schema promised, captive portals answering with
-HTML instead of JSON, and 500s where a GitLab was previously claimed
-out of thin air. The DOM side is proven in a browser harness
-(`scripts/schaufenster2093/`): hostile repository names,
-descriptions, avatars (`javascript:` URLs fall back to the letter),
-and search words arrive as *text*, never as live elements — no
-injected tag ever executes.
+Die Härtungs-Suiten (`*_hart.py` in beiden Bahnen) fahren den Code gegen
+feindliche Eingaben: UTF-8-BOM in `hacs.json` (Windows-Editoren lassen eines
+da), fünfteilige Versionen, wo `.10` gegen `.9` gewinnen muss, Suchwörter, die
+wie Skript-Einschleusungen aussehen, zehntausend Zeichen lange Schlüsselwörter,
+Speicher, der nicht hält, was das Schema versprach, Captive Portals, die mit
+HTML statt JSON antworten, und 500er, wo vorher ein GitLab aus dem Nichts
+behauptet wurde. Die DOM-Seite ist im Browser-Harness bewiesen
+(`scripts/schaufenster2093/`): feindliche Repository-Namen, Beschreibungen,
+Avatare (`javascript:`-URLs fallen auf den Buchstaben zurück) und Suchwörter
+kommen als *Text* an, nie als lebende Elemente — nie führt ein
+eingeschleustes Tag etwas aus.
 
-On Windows set `PYTHONUTF8=1` first — otherwise healthy tests report
-failures that are not there.
+Unter Windows zuerst `PYTHONUTF8=1` setzen — sonst melden gesunde Tests
+Fehler, die keine sind.
 
-Releases are built deterministically by
-`auslieferung/release_bauen.py`: fixed timestamps, sorted entries,
-reproducible bytes. A tag pipeline builds the archive and attaches it to a
-GitLab release; the build refuses when the tag and `manifest.json`
-disagree on the version.
+Releases baut `auslieferung/release_bauen.py` deterministisch: feste
+Zeitstempel, sortierte Einträge, reproduzierbare Bytes. Eine Tag-Pipeline baut
+das Archiv und heftet es an ein GitLab-Release; der Bau verweigert, wenn Tag
+und `manifest.json` verschiedene Versionen nennen.
 
-The engineering documentation is German — that is where the reasoning
-lives: [ARCHITEKTUR.md](ARCHITEKTUR.md) (the four structural decisions),
-[ROADMAP.md](ROADMAP.md) (milestones M0–M10 and their acceptance tests),
-[MITARBEIT.md](MITARBEIT.md) (how to contribute). The interface for a
-second forge provider — and what HACS itself would have to adopt for one —
-is written up in [PROPOSAL.md](PROPOSAL.md).
+Die Dokumentation hier ist durchgehend deutsch — auf der Forge ist Deutsch
+Amtssprache (Issue #16). Das Denken wohnt in
+[ARCHITEKTUR.md](ARCHITEKTUR.md) (die fünf Struktur-Entscheidungen),
+[ROADMAP.md](ROADMAP.md) (Meilensteine M0–M10 mit ihren Abnahmen) und
+[MITARBEIT.md](MITARBEIT.md) (wie man mitarbeitet). Die Schnittstelle für
+einen zweiten Forge-Anbieter — und was HACS selbst dafür übernehmen müsste —
+steht ausgearbeitet in [PROPOSAL.md](PROPOSAL.md). Die englische README und
+das englische Wiki gehören zum späteren GitHub-Auftritt; bis dahin liegen sie
+in der Git-Geschichte dieses Repositories verwahrt.
 
-## License
+## Lizenz
 
-[MIT](LICENSE) — Copyright (c) 2026 chance-konstruktion and the HACS*lab
-contributors.
+[MIT](LICENSE) — Copyright (c) 2026 chance-konstruktion und die
+HACS\*lab-Beitragenden.
