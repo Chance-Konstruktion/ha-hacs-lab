@@ -38,18 +38,38 @@ def ist_vorabversion(version: str) -> bool:
     return bool(re.match(r"^[ab]\d*$", rest))
 
 
+#: Wie viele Glieder einer Version in den Sortierschluessel ziehen.
+#: Vier reichen fuer den Normalfall, aber echte Tags tragen mitunter
+#: fuenf und mehr (``1.2.3.4.10``) -- und der fruhere String-Rueckhalt
+#: haette ``.10`` vor ``.9`` sortiert, weil "1" < "9" als Text gilt.
+#: Acht Stellen decken alles ab, was je im Freien rumlief.
+_SCHLUESSEL_TIEFE = 8
+
+
 def _schluessel(version: str) -> tuple:
     """Sortierschluessel: Zahlenkopf zuerst, Vorabversion danach kleiner.
 
     Die Zahlen kommen ausschliesslich aus dem Kopf. Sonst wuerde die
     ``1`` aus ``1.0.0-rc1`` mitzaehlen und die Vorabversion vor die
     fertige Fassung schieben.
+
+    Der letzte Teil ordnet nur noch den NACHTRAG hinter dem Kopf --
+    Build-Metadaten (hinter ``+``) sind dabei abgeschnitten, wie es
+    SemVer verlangt: ``1.0.0+build1`` ist dieselbe Version wie
+    ``1.0.0``. Und weil ungleiche Schreibtiefe im Kopf durch die
+    Nullen im Zahlenteil schon gleichsteht, ist ``1.2 == 1.2.0`` --
+    ein Re-Tag mit angehaengter Null darf kein Update-Badge wecken.
     """
     v = normalisiere(version)
     kopf = _KOPF.match(v)
-    zahlen = tuple(int(z) for z in kopf.group(0).split(".")[:4]) if kopf else ()
-    zahlen = zahlen + (0,) * (4 - len(zahlen))
-    return (zahlen, 0 if ist_vorabversion(v) else 1, v)
+    zahlen = (
+        tuple(int(z) for z in kopf.group(0).split(".")[:_SCHLUESSEL_TIEFE])
+        if kopf
+        else ()
+    )
+    zahlen = zahlen + (0,) * (_SCHLUESSEL_TIEFE - len(zahlen))
+    nachtrag = _KOPF.sub("", v).split("+", 1)[0]
+    return (zahlen, 0 if ist_vorabversion(v) else 1, nachtrag)
 
 
 def vergleiche(links: str, rechts: str) -> int:

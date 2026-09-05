@@ -45,6 +45,29 @@ from .forge import ForgeFehler, NichtGefunden
 #: Wartezeit in Sekunden, wenn der Anbieter bei 429 keine vorgibt.
 STANDARD_WARTEZEIT = 1.0
 
+
+class KeinJson(ForgeFehler):
+    """Der Server antwortete 200, aber nicht mit JSON.
+
+    Fuer die meisten Aufrufer ist das ein gewoehnlicher Fehler. Nur
+    die Schmiede hoert genauer hin: 200-mit-HTML ist kein verriegeltes
+    GitLab-Tor (401/403), sondern ein Captive Portal oder ein Proxy,
+    der vor der Instanz sitzt -- so eine Adresse ist KEIN GitLab,
+    auch wenn die Statuszeile es fast verspricht.
+    """
+
+
+class TorVerriegelt(ForgeFehler):
+    """401/403 -- das Tor ist da, aber der Schluessel fehlt oder reicht nicht.
+
+    Nur dieser Fall duerfen die Schmiede als "hier wohnt ein GitLab"
+    lesen: GitLab verschliesst seine Versionsfrage, Gitea und Forgejo
+    404en sie. Ein 500 oder ein 429 ist KEIN Beweis fuer GitLab --
+    bis Flug 2093 zaehlte jeder ForgeFehler als verriegeltes Tor,
+    und ein halbtoter Server haette als GitLab gegolten.
+    """
+
+
 _Schluessel = str | tuple[str, tuple[tuple[str, str], ...]]
 
 
@@ -231,7 +254,7 @@ class AiohttpClient:
         if status == 404:
             raise NichtGefunden(f"nicht gefunden: {url}")
         if status in (401, 403):
-            raise ForgeFehler(f"Token fehlt oder reicht nicht (HTTP {status}): {url}")
+            raise TorVerriegelt(f"Token fehlt oder reicht nicht (HTTP {status}): {url}")
         if status == 429:
             sekunden = kopf.get("retry-after", "?")
             raise ForgeFehler(
@@ -250,6 +273,4 @@ class AiohttpClient:
         try:
             return json.loads(text)
         except ValueError as fehler:
-            raise ForgeFehler(
-                f"Antwort von {url} ist kein JSON: {text[:50]!r}"
-            ) from fehler
+            raise KeinJson(f"Antwort von {url} ist kein JSON: {text[:50]!r}") from fehler

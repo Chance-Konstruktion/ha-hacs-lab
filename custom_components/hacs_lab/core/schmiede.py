@@ -35,6 +35,7 @@ from .forge import Forge, ForgeFehler, HttpClient, NichtGefunden
 from .forgejo_forge import ForgejoForge
 from .gitea_forge import GiteaForge
 from .gitlab_forge import GitLabForge
+from .http_aiohttp import KeinJson, TorVerriegelt
 from .identity import FORGEJO, GITEA, GITLAB
 
 #: Der Name, unter dem die Familien-API (Gitea wie Forgejo) erreicht wird.
@@ -128,10 +129,17 @@ async def erkenne(klient: HttpClient, host: str) -> str:
         antwort = await klient.get_json(GITLAB_API.format(host=host))
     except NichtGefunden:
         pass  # kein GitLab unter der Adresse -- weiter zur Familie
-    except ForgeFehler:
+    except KeinJson:
+        # 200, aber HTML statt JSON: ein Captive Portal oder ein Proxy
+        # sitzt vor der Adresse. Das ist KEIN GitLab -- frueher stand
+        # dieser Fall beim "verriegelten Tor" mit drin und machte aus
+        # jedem Hotspot ein angebliches GitLab (Flug 2093).
+        pass
+    except TorVerriegelt:
         # Das Tor ist da, aber verriegelt (401/403): nur GitLab
         # verschliesst seine Versionsfrage; Gitea und Forgejo 404en
-        # einen Pfad, den es fuer sie nicht gibt.
+        # einen Pfad, den es fuer sie nicht gibt. Ein 500 oder 429
+        # ist KEIN Beweis -- der fliegt ehrlich weiter (Flug 2093).
         return GITLAB
     else:
         if isinstance(antwort, dict):
@@ -146,9 +154,17 @@ async def erkenne(klient: HttpClient, host: str) -> str:
             "unter " + host + " antwortet weder GitLab (api/v4) "
             "noch Gitea/Forgejo (api/v1) -- den Anbieter von Hand waehlen"
         ) from None
-    except ForgeFehler:
+    except KeinJson:
+        # Auch das Familien-Tor antwortet mit HTML: dieselbe Wand.
+        raise AnbieterUnbekannt(
+            "unter " + host + " antwortet kein JSON-API (api/v4 wie api/v1 "
+            "bringen HTML -- vermutlich ein Portal oder Proxy vor der "
+            "Instanz) -- den Anbieter von Hand waehlen"
+        ) from None
+    except TorVerriegelt:
         # Tor da, aber verriegelt -- die Familie trotzdem, die Nummer
-        # bleibt unbeantwortet; die Startseite entscheidet.
+        # bleibt unbeantwortet; die Startseite entscheidet. Gitea/Forgejo
+        # koennen die Versionsfrage hinter der Anmeldung verstecken.
         return await _familie_aus_seite(klient, host)
 
     version = antwort.get("version") if isinstance(antwort, dict) else None
