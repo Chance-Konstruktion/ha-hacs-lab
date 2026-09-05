@@ -49,6 +49,9 @@ def pruefe_hacs_json(roh: bytes | str, kategorie: str = "integration") -> Befund
 
     try:
         text = roh.decode("utf-8") if isinstance(roh, bytes) else roh
+        # Ein BOM (Windows-Editoren speichern UTF-8 gern mit einer)
+        # ist fuer json.loads ein Buchstabe vor der Klammer -- weg damit.
+        text = text.lstrip("\ufeff")
         daten = json.loads(text)
     except UnicodeDecodeError:
         return Befund(False, kategorie=kategorie, fehler=["hacs.json ist nicht UTF-8"])
@@ -96,6 +99,7 @@ def pruefe_manifest(roh: bytes | str) -> Befund:
     hinweise: list[str] = []
     try:
         text = roh.decode("utf-8") if isinstance(roh, bytes) else roh
+        text = text.lstrip("\ufeff")  # BOM siehe pruefe_hacs_json
         daten = json.loads(text)
     except (UnicodeDecodeError, json.JSONDecodeError) as fehlschlag:
         return Befund(False, fehler=["manifest.json unlesbar: " + str(fehlschlag)])

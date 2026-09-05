@@ -240,6 +240,18 @@ python -m pytest -q                       # core: no HA, no network
 python -m pytest tests_ha -q -p pytest_homeassistant_custom_component
 ```
 
+The hardening suites (`*_hart.py` in both lanes) run the code against
+hostile input: UTF-8 BOM in `hacs.json` (Windows editors leave one),
+five-segment versions where `.10` must beat `.9`, search words that
+look like script injections, ten-thousand-character keywords, storage
+that is not what the schema promised, captive portals answering with
+HTML instead of JSON, and 500s where a GitLab was previously claimed
+out of thin air. The DOM side is proven in a browser harness
+(`scripts/schaufenster2093/`): hostile repository names,
+descriptions, avatars (`javascript:` URLs fall back to the letter),
+and search words arrive as *text*, never as live elements — no
+injected tag ever executes.
+
 On Windows set `PYTHONUTF8=1` first — otherwise healthy tests report
 failures that are not there.
 
