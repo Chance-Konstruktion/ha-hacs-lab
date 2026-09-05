@@ -149,15 +149,25 @@ async def test_neues_release_erscheint_ohne_zutun(
         [eintrag_daten()],
         stand={STORAGE_KEY: {"installiert": "1.1.0", "vorabversionen": False}},
     )
-    # Beim Vorlauf um den Takt feuert der Aktualisierer (empirisch so mit
-    # dieser Home-Assistant-Version; der Herzschlag bleibt im Debounce).
-    # Jede Runde fragt zuerst die Stammdaten ueber die ID (M8) -- drei
-    # Abrufe in der ersten, fuenf in der zweiten Runde.
+    # Beim Vorlauf um den Takt feuert der Lager-Start von Flug 2084
+    # zuerst (sein Termin liegt frueher), danach der Aktualisierer.
+    # Der Lager-Lauf fragt die Zeile ueber die ID und durchsucht dann
+    # die Instanz (Suche, hacs.json, letzte Version); der Takt fragt
+    # wieder Stammdaten und Releases. Jede Runde zaehlt: drei Abrufe
+    # in der ersten, vier fuer das Lager, zwei in der zweiten Runde.
     attrappe = sitzung_einpflanzen(
         [
             herzschlag(),
             stammdaten(),
             releases(release_objekt("v1.2.0")),
+            stammdaten(),  # Lager: Zeile ueber die ID
+            Aufzeichnung(  # Lager: die Suche ueber die ganze Instanz
+                text=json.dumps([projekt()]), kopfzeilen={}
+            ),
+            Aufzeichnung(  # Lager: hacs.json des Kandidaten
+                rohbytes=b'{"name": "Bar"}', kopfzeilen={}
+            ),
+            releases(release_objekt("v1.2.0")),  # Lager: letzte Version
             stammdaten(),
             releases(release_objekt("v1.3.0", "Frisch")),
         ]
@@ -173,7 +183,13 @@ async def test_neues_release_erscheint_ohne_zutun(
     assert frisch.attributes["latest_version"] == "1.3.0"
     assert frisch.attributes["release_summary"] == "Frisch"
     assert frisch.state == "on"
-    assert len(attrappe.abrufe) == 5
+    assert len(attrappe.abrufe) == 9
+    # Das Lager hat den Scan ueberlebt: der Kandidat steht als Fund
+    # darin, und er ist als vorhanden verzeichnet.
+    lager = hass_storage["hacs_lab.lager.gitlab_example_net"]["data"]
+    assert [f["full_name"] for f in lager["funde"]] == ["foo/bar"]
+    assert lager["funde"][0]["vorhanden"] is True
+    assert lager["eintraege"][0]["installiert"] == "1.1.0"
 
 
 async def test_vorab_schalter_dreht_die_auswahl(

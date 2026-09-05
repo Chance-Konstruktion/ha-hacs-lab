@@ -23,6 +23,22 @@ STANDARD_ABSTAND_MINUTEN = 720
 #: dann eine neue Zahl (siehe ablage.py).
 ABLAGE_VERSION = 1
 
+#: Version des Lagers (Flug 2084) -- der Zwischenspeicher des Ladens.
+#: Dieselbe Ernsthaftigkeit wie bei der Ablage: die Form ist neu, die
+#: 1 ist ihr Anfang; jede kuenftige Umdeutung bekommt eine Migration.
+LAGER_VERSION = 1
+
+#: Das Ereignis, das der Laden feuert, sobald das Lager frisch liegt.
+#: Das Panel hoert darauf und malt neu, ohne dass jemand einen Knopf
+#: drueckt -- offen bleiben und zuschauen genuegt.
+EREIGNIS_AKTUALISIERT = DOMAIN + "_aktualisiert"
+
+#: Wie lange nach dem Start der erste Hintergrund-Lauf des Lagers
+#: kommt (Sekunden). Der Laden soll nach dem Neustart nicht leer
+#: aufgehen; 45 Sekunden geben Home Assistant Zeit, zuerst alles
+#: andere anzustellen, bevor die Instanz durchsucht wird.
+LAGER_START_VERZOEGERUNG_SEK = 45
+
 
 def host_normalisieren(host: str) -> str:
     """Bringt jede Menscheneingabe auf die Form ``gitlab.example.net``.
@@ -48,3 +64,16 @@ def ablage_schluessel(host: str) -> str:
     dieselbe Unterscheidung wie im storage_key des Kerns.
     """
     return DOMAIN + "." + host.replace(".", "_").replace(":", "_")
+
+
+def lager_schluessel(host: str) -> str:
+    """Speicherschluessel des Lagers fuer eine Instanz (Flug 2084).
+
+    Das Lager ist der Zwischenspeicher des Ladens: die Zeilen der
+    Liste und die Funde des letzten Scans, damit der Laden nie leer
+    aufgeht -- nicht beim Betreten, nicht nach dem Neustart. Es liegt
+    in einer eigenen Datei neben der Ablage, weil es abgeleitetes
+    Wissen ist: alles darin laesst sich aus Instanz und Ablage
+    wiederherstellen, die Ablage bleibt die Wahrheit.
+    """
+    return DOMAIN + ".lager." + host.replace(".", "_").replace(":", "_")

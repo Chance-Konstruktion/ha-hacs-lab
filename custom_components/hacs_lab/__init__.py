@@ -20,12 +20,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
+import homeassistant.util.dt as dt_util
 from homeassistant.components import websocket_api as ha_websocket_api
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.helpers.issue_registry import IssueSeverity
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
@@ -42,6 +45,7 @@ from .const import (
     CONF_HOST,
     CONF_TOKEN,
     DOMAIN,
+    LAGER_START_VERZOEGERUNG_SEK,
     STANDARD_ABSTAND_MINUTEN,
     ablage_schluessel,
 )
@@ -50,6 +54,7 @@ from .core.gitlab_forge import GitLabForge
 from .core.http_aiohttp import AiohttpClient
 from .eintraege import Eintraege
 from .frontend import richten as oberflaeche_richten
+from .lager import Lager
 from .websocket_api import BEFEHLE
 
 _LOGGER = logging.getLogger(__name__)
@@ -134,13 +139,16 @@ class Laufzeit:
 
     Seit Stufe M3 gehoert die Liste der Custom Repositories dazu: sie
     wird beim Richten aus der Ablage gelesen und bleibt fuer den
-    Optionsdialog greifbar.
+    Optionsdialog greifbar. Das Lager (Flug 2084) haengt als Naht
+    dynamisch dazu -- dieselbe Form wie ``staende`` und
+    ``aktualisierer``, bis M0.5 die Form der Laufzeit geklaert hat.
     """
 
     forge: GitLabForge
     koordinator: HacsLabKoordinator
     ablage: Ablage
     eintraege: Eintraege
+    lager: Lager | None = None
 
 
 def _meldung_unlesbare_ablage(hass: HomeAssistant, host: str, anzahl: int) -> None:
@@ -192,15 +200,35 @@ async def async_setup_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
     koordinator = HacsLabKoordinator(hass, eintrag, forge)
     await koordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[eintrag.entry_id] = Laufzeit(
+    hass.data.setdefault(DOMAIN, {})[eintrag.entry_id] = laufzeit = Laufzeit(
         forge=forge, koordinator=koordinator, ablage=ablage, eintraege=eintraege
     )
+    # Flug 2084: das Lager wird beim Richten aus dem Speicher gelesen
+    # -- der Laden ist nach dem Neustart sofort voll, auch bevor der
+    # erste volle Lauf ueberhaupt stattfand. Der Start-Lauf kommt
+    # verzuegert (unten), der Takt haelt das Lager danach frisch.
+    lager = Lager(hass, eintrag, laufzeit)
+    await lager.laden()
+    laufzeit.lager = lager
     # Stufe M5: die Waben des Vorhabens -- eine update-Entity je Eintrag
     # samt Vorab-Schalter. Erst nach dem Herzschlag: steht die Verbindung
     # nicht, gibt es nichts zu beobachten, und der Eintrag meldet sich
     # ohnehin als nicht bereit.
     await hass.config_entries.async_forward_entry_setups(eintrag, ("update", "switch"))
     eintrag.async_on_unload(eintrag.add_update_listener(_abstand_geaendert))
+
+    @callback
+    def _erster_lauf(_jetzt: Any) -> None:
+        """Der Start-Lauf des Lagers -- im Hintergrund, ohne Eile."""
+        hass.async_create_task(lager.async_refresh())
+
+    eintrag.async_on_unload(
+        async_track_point_in_utc_time(
+            hass,
+            _erster_lauf,
+            dt_util.utcnow() + timedelta(seconds=LAGER_START_VERZOEGERUNG_SEK),
+        )
+    )
     _LOGGER.info("HACS*lab eingerichtet fuer %s", forge.host)
     return True
 
@@ -216,14 +244,18 @@ async def async_unload_entry(hass: HomeAssistant, eintrag: ConfigEntry) -> bool:
         aktualisierer = getattr(laufzeit, "aktualisierer", None)
         if aktualisierer is not None:
             await aktualisierer.async_shutdown()
+        if laufzeit.lager is not None:
+            await laufzeit.lager.async_shutdown()
     return waben_entladen
 
 
 async def _abstand_geaendert(hass: HomeAssistant, eintrag: ConfigEntry) -> None:
-    """Optionswechsel ohne Neustart: nur der Takt wird neu gesetzt."""
+    """Optionswechsel ohne Neustart: alle Takte werden neu gesetzt."""
     laufzeit: Laufzeit | None = hass.data.get(DOMAIN, {}).get(eintrag.entry_id)
     if laufzeit is None:
         return
     minuten = int(eintrag.options.get(CONF_ABSTAND_MINUTEN) or STANDARD_ABSTAND_MINUTEN)
     laufzeit.koordinator.update_interval = timedelta(minutes=minuten)
+    if laufzeit.lager is not None:
+        laufzeit.lager.update_interval = timedelta(minutes=minuten)
     _LOGGER.info("Abstand fuer %s auf %s Minuten gesetzt", laufzeit.forge.host, minuten)

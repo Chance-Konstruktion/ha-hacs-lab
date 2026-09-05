@@ -25,6 +25,7 @@ from custom_components.hacs_lab.core.identity import RepositoryIdentity
 from custom_components.hacs_lab.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from tests.attrappe import Aufzeichnung
 
 from .test_m5 import (
     SCHLUESSEL,
@@ -54,8 +55,6 @@ def mock_eintrag_mit_token(token: str) -> MockConfigEntry:
 
 
 def token_problem(status: int = 401):
-    from tests.attrappe import Aufzeichnung
-
     return Aufzeichnung(status=status, text='{"message": "unauthorized"}', kopfzeilen={})
 
 
@@ -205,10 +204,17 @@ async def test_token_problem_wird_meldung_und_heilt(
 
     # Heilung: naechster Lauf gesund -> Meldung weg, Entity lebt. Der
     # Vorlauf um den Takt umgeht den Debounce der soeben gescheiterten
-    # Runde (im M5-Test erprobt). Die gesunde Runde fragt zuerst die
-    # Stammdaten, dann die Releases.
+    # Runde (im M5-Test erprobt). Der Lager-Start (Flug 2084) feuert
+    # zuerst -- Zeile ueber die ID, dann die leere Suche --, danach
+    # fragt die gesunde Runde des Aktualisierers zuerst die Stammdaten
+    # und dann die Releases.
     attrappe.aufzeichnungen.extend(
-        [stammdaten(), releases(release_objekt("v1.2.0", "Wieder da"))]
+        [
+            stammdaten(),  # Lager: die Zeile ueber die ID
+            Aufzeichnung(text="[]", kopfzeilen={}),  # Lager: die Suche
+            stammdaten(),
+            releases(release_objekt("v1.2.0", "Wieder da")),
+        ]
     )
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=12))
     await hass.async_block_till_done()
@@ -248,8 +254,17 @@ async def test_instanz_weg_behaelt_alte_daten(
     assert fund.fehler is None
 
     # Es geht wieder: alles kehrt zurueck, nichts ging verloren. Auch hier
-    # der Takt-Vorlauf (Debounce), nicht die direkte Bitte.
-    attrappe.aufzeichnungen.extend([stammdaten(), releases(release_objekt("v1.2.0"))])
+    # der Takt-Vorlauf (Debounce), nicht die direkte Bitte. Der Lager-
+    # Start (Flug 2084) feuert zuerst -- Zeile ueber die ID, leere
+    # Suche --, danach die gesunde Runde des Aktualisierers.
+    attrappe.aufzeichnungen.extend(
+        [
+            stammdaten(),  # Lager: die Zeile ueber die ID
+            Aufzeichnung(text="[]", kopfzeilen={}),  # Lager: die Suche
+            stammdaten(),
+            releases(release_objekt("v1.2.0")),
+        ]
+    )
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(hours=12))
     await hass.async_block_till_done()
     assert zustand(hass, "update").state == "on"

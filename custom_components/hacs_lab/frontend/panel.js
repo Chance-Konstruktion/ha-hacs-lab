@@ -15,11 +15,29 @@
  *   Suche in der Mitte (``Suchen oder springen zu …``) und Werkzeugen
  *   rechts (Frischholen, Neu). Brotkrumen im Detail wie dort.
  * * die Liste ist EINE Seite in einklappbaren Abschnitten, wie im
- *   HACS-Laden: Aktualisierbar, Installierbar, Neu, Downloadbar --
+ *   HACS-Laden: Aktualisierbar, Installiert, Neu, Downloadbar --
  *   jeder Kopf zaehlt seine Karten und laesst sich zuklappen.
  * * der Laden frischt sich selber auf: jedes Betreten laeuft
  *   ``hacs_lab/erneuern`` -- der frische M5-Lauf, nicht der Takt.
  *   Ruht die Bedienung (15 Sekunden), wird kein zweiter Lauf erzwungen.
+ *
+ * Flug 2084 macht den Laden voll -- die Wünsche des Imkers:
+ *
+ * * das Lager (``hacs_lab/lager.<host>`` im Speicher) hält die Liste
+ *   und die Funde über Neustart und Wiederkehr hinweg: das Betreten
+ *   malt SOFORT aus dem Speicher (``hacs_lab/eintraege``, kein
+ *   Netzruf) und erneuert danach im Hintergrund -- der Laden geht
+ *   nie wieder leer auf. Der Hintergrund-Takt des Lagers feuert
+ *   ``hacs_lab_aktualisiert``; das Panel hört darauf und malt neu,
+ *   während es offen bleibt.
+ * * die Karten tragen die Zeichen ihrer Projekte (``avatar_url``);
+ *   fehlt das Bild, bleibt ein Buchstabe -- nie ein kaputtes Bild.
+ * * die Namen sind keine lila GitLab-Links mehr: Weiß im dunkeln,
+ *   Schwarz im hellen -- die Farbe der Bedienung (``--primary-text-
+ *   color``), damit der Laden in jede Tracht passt.
+ * * der Abschnitt heisst jetzt Ehrlich: Installiert ist, was
+ *   heruntergeladen und oben ist; Downloadbar ist, was beobachtet
+ *   wird, aber noch nichts heruntergeladen hat.
  *
  * Zwei Sprachen, im File selbst: Deutsch und Englisch, gewaehlt nach
  * der Sprache der Bedienung. Der Kennzeichnungs-Suffix (*lab, *forge)
@@ -41,22 +59,23 @@ const TEXTE = {
     anzahl: (n) => `${n} Repositor${n === 1 ? "y" : "ies"}`,
     abschnitte: {
       aktualisierbar: "Aktualisierbar",
-      installierbar: "Installierbar",
+      installiert: "Installiert",
       neu: "Neu",
       downloadbar: "Downloadbar",
     },
     abschnittstexte: {
       aktualisierbar: "Eine neuere Version ist erschienen",
-      installierbar: "Beobachtet, aber noch nichts heruntergeladen",
+      installiert: "Heruntergeladen und auf dem neuesten Stand",
       neu: "Funde der Suche — noch nicht aufgenommen",
-      downloadbar: "Heruntergeladen und auf dem neuesten Stand",
+      downloadbar: "Beobachtet, aber noch nichts heruntergeladen",
     },
     abschnitte_leer: {
       aktualisierbar: "Nichts zu tun — alles auf dem neuesten Stand.",
-      installierbar: "Nichts Beobachtetes ohne Download.",
+      installiert: "Noch nichts heruntergeladen.",
       neu: "Noch keine Funde — starte die Suche.",
-      downloadbar: "Noch nichts heruntergeladen.",
+      downloadbar: "Nichts Beobachtetes ohne Download.",
     },
+    stand: "Stand",
     scan: "Suchen",
     quelle: "Quelle",
     gruppe: "Gruppe (leer = ganze Instanz)",
@@ -114,22 +133,23 @@ const TEXTE = {
     anzahl: (n) => `${n} repositor${n === 1 ? "y" : "ies"}`,
     abschnitte: {
       aktualisierbar: "Updatable",
-      installierbar: "Installable",
+      installiert: "Installed",
       neu: "New",
       downloadbar: "Downloadable",
     },
     abschnittstexte: {
       aktualisierbar: "A newer version has been released",
-      installierbar: "Watched, but nothing downloaded yet",
+      installiert: "Downloaded and up to date",
       neu: "Findings of the scan — not added yet",
-      downloadbar: "Downloaded and up to date",
+      downloadbar: "Watched, but nothing downloaded yet",
     },
     abschnitte_leer: {
       aktualisierbar: "Nothing to do — everything is up to date.",
-      installierbar: "Nothing watched without a download.",
+      installiert: "Nothing downloaded yet.",
       neu: "No findings yet — run the scan.",
-      downloadbar: "Nothing downloaded yet.",
+      downloadbar: "Nothing watched without a download.",
     },
+    stand: "as of",
     scan: "Scan",
     quelle: "Source",
     gruppe: "Group (empty = whole instance)",
@@ -333,6 +353,25 @@ function datum_kurz(iso) {
   return d.toLocaleDateString();
 }
 
+/** Uhrkurzform (Stand des Lagers), falls ISO -- sonst unverandert. */
+function uhr_kurz(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Der juengste Lager-Stand ueber alle Instanzen (leer, wenn keiner). */
+function neuester_stand(karte) {
+  let juengste = "";
+  for (const wert of Object.values(karte || {})) {
+    if (String(wert) > juengste) {
+      juengste = String(wert);
+    }
+  }
+  return juengste;
+}
+
 /** Kategorienamen -- der Server schickt sie mit, dies ist nur der Rueckfall. */
 const KATEGORIEN = [
   "integration",
@@ -344,7 +383,10 @@ const KATEGORIEN = [
 ];
 
 /** Die Abschnitte des Ladens, in dieser Reihenfolge. */
-const ABSCHNITTE = ["aktualisierbar", "installierbar", "neu", "downloadbar"];
+const ABSCHNITTE = ["aktualisierbar", "installiert", "neu", "downloadbar"];
+
+/** Das Ereignis, das der Server feuert, sobald ein Lager frisch liegt. */
+const EREIGNIS_AKTUALISIERT = "hacs_lab_aktualisiert";
 
 /**
  * Der Tanuki -- das Markenbild von GitLab, vier Pfade aus der Feder
@@ -420,7 +462,8 @@ class HacsLabPanel extends HTMLElement {
     this._sort = "name";
     this._eintraege = [];
     this._instanzen = [];
-    this._funde = null;
+    this._funde_pro_host = {}; // host -> Funde (Lager oder eigene Suche)
+    this._aktualisiert_am = {}; // host -> Zeitstempel des Lagers
     this._kategorien = KATEGORIEN;
     this._scan_host = "";
     this._scan_gruppe = "";
@@ -431,9 +474,10 @@ class HacsLabPanel extends HTMLElement {
     this._instanz_fehler = {}; // host -> Grund (aus dem frischen Lauf)
     this._beschaeftigt = false;
     this._erneuert_am = 0;
+    this._abmeldung = null; // Ereignis-Abo kuenndigen
     this._offen = {
       aktualisierbar: true,
-      installierbar: true,
+      installiert: true,
       neu: true,
       downloadbar: false,
     };
@@ -443,6 +487,7 @@ class HacsLabPanel extends HTMLElement {
     const erste = this._hass === null;
     this._hass = hass;
     if (erste) {
+      this._abonnieren();
       this._betrete();
     }
   }
@@ -464,19 +509,58 @@ class HacsLabPanel extends HTMLElement {
     }
   }
 
+  disconnectedCallback() {
+    // Das Ereignis-Abo gehoert zum Element: verlaesst der Laden die
+    // Buehne, wird es gekuendigt -- niemand hoert auf leere Kartons.
+    if (this._abmeldung) {
+      try {
+        this._abmeldung();
+      } catch (fehler) {
+        /* schon gekuendigt */
+      }
+      this._abmeldung = null;
+    }
+  }
+
   get _t() {
     return TEXTE[sprache(this._hass)];
   }
 
-  /** Der Betritt: frischer Lauf, es sei denn, er ruht eben noch. */
+  /** Der Betritt: erst aus dem Lager malen, dann im Hintergrund erneuern. */
   _betrete() {
     if (!this._hass) {
       return;
     }
-    if (this._erneuert_am && Date.now() - this._erneuert_am < BETRETEN_RUHE_MS) {
-      return;
+    this._lade().finally(() => {
+      if (
+        this._erneuert_am &&
+        Date.now() - this._erneuert_am < BETRETEN_RUHE_MS
+      ) {
+        return;
+      }
+      this._erneuern();
+    });
+  }
+
+  /** Auf das Ereignis des Lagers hoeren -- der Hintergrund malt mit. */
+  _abonnieren() {
+    const verbindung = this._hass && this._hass.connection;
+    if (!verbindung || typeof verbindung.subscribeEvents !== "function") {
+      return; // Rueckhalt: ohne Abonnement bleibt der Frischhol-Knopf
     }
-    this._erneuern();
+    verbindung
+      .subscribeEvents((ereignis) => {
+        if (!ereignis || !ereignis.host || this._beschaeftigt || this._detail) {
+          return;
+        }
+        this._lade();
+      }, EREIGNIS_AKTUALISIERT)
+      .then((abmelden) => {
+        this._abmeldung = abmelden;
+      })
+      .catch(() => {
+        /* das Abonnement darf scheitern, der Laden bleibt bedienbar */
+      });
   }
 
   /** Fehler-Objekt (WebSocket oder Dienst) in Klartext. */
@@ -495,7 +579,7 @@ class HacsLabPanel extends HTMLElement {
     return t.fehler.sonst;
   }
 
-  /** Der frische Lauf: jeder Aktualisierer wird herumgedreht, dann Liste. */
+  /** Der frische Lauf: jeder Aktualisierer wird herumgedreht, dann das Lager. */
   async _erneuern() {
     if (!this._hass || this._beschaeftigt) {
       return;
@@ -506,13 +590,8 @@ class HacsLabPanel extends HTMLElement {
       const antwort = await this._hass.callWS({
         type: "hacs_lab/erneuern",
       });
-      this._eintraege = antwort.eintraege || [];
-      this._instanzen = antwort.instanzen || [];
-      this._kategorien = antwort.kategorien || KATEGORIEN;
+      this._uebernehme(antwort);
       this._instanz_fehler = antwort.gescheitert || {};
-      if (!this._scan_host && this._instanzen.length) {
-        this._scan_host = this._instanzen[0];
-      }
       this._fehler = "";
     } catch (fehler) {
       this._fehler = this._fehlertext(fehler);
@@ -522,7 +601,7 @@ class HacsLabPanel extends HTMLElement {
     this._zeichne();
   }
 
-  /** Liste laden (installierte Eintraege + Instanzen) -- der schnelle Griff. */
+  /** Liste laden -- der schnelle Griff aus dem Lager (kein Netzruf). */
   async _lade() {
     if (!this._hass) return;
     this._beschaeftigt = true;
@@ -531,18 +610,29 @@ class HacsLabPanel extends HTMLElement {
       const antwort = await this._hass.callWS({
         type: "hacs_lab/eintraege",
       });
-      this._eintraege = antwort.eintraege || [];
-      this._instanzen = antwort.instanzen || [];
-      this._kategorien = antwort.kategorien || KATEGORIEN;
-      if (!this._scan_host && this._instanzen.length) {
-        this._scan_host = this._instanzen[0];
-      }
+      this._uebernehme(antwort);
       this._fehler = "";
     } catch (fehler) {
       this._fehler = this._fehlertext(fehler);
     }
     this._beschaeftigt = false;
     this._zeichne();
+  }
+
+  /** Eine Lager-Antwort in den Zustand des Panels uebernehmen. */
+  _uebernehme(antwort) {
+    this._eintraege = antwort.eintraege || [];
+    this._instanzen = antwort.instanzen || [];
+    this._kategorien = antwort.kategorien || KATEGORIEN;
+    this._funde_pro_host = {};
+    for (const fund of antwort.funde || []) {
+      const host = fund.host || this._scan_host || "";
+      (this._funde_pro_host[host] = this._funde_pro_host[host] || []).push(fund);
+    }
+    this._aktualisiert_am = antwort.aktualisiert_am || {};
+    if (!this._scan_host && this._instanzen.length) {
+      this._scan_host = this._instanzen[0];
+    }
   }
 
   /** Entdeckung starten (Stufe M6: der Scan schreibt nichts). */
@@ -557,7 +647,9 @@ class HacsLabPanel extends HTMLElement {
         mit_untergruppen: this._scan_untergruppen,
         mit_entwicklung: this._scan_entwicklung,
       });
-      this._funde = antwort.funde || [];
+      // Die eigene Suche gilt fuer diese Instanz -- bis der naechste
+      // Lauf des Lagers sie mit dem Hausbestand ueberschreibt.
+      this._funde_pro_host[this._scan_host] = antwort.funde || [];
       this._fehler = "";
     } catch (fehler) {
       this._fehler = this._fehlertext(fehler);
@@ -598,11 +690,11 @@ class HacsLabPanel extends HTMLElement {
       });
       this._fehler = "";
       await this._lade();
-      if (this._funde) {
-        const frisch = this._funde.map((f) =>
+      const liste = this._funde_pro_host[host] || [];
+      if (liste.length) {
+        this._funde_pro_host[host] = liste.map((f) =>
           f.full_name === pfad ? { ...f, vorhanden: true } : f
         );
-        this._funde = frisch;
       }
     } catch (fehler) {
       this._fehler = this._fehlertext(fehler);
@@ -676,9 +768,9 @@ class HacsLabPanel extends HTMLElement {
     } catch (fehler) {
       this._fehler = this._fehlertext(fehler);
     }
-    await this._lade();
     this._beschaeftigt = false;
-    this._zeichne();
+    this._erneuert_am = 0; // der Betritt-Ruhe zwingt hier nichts
+    await this._erneuern();
   }
 
   /** Suchnadel auf einer Zeile (Name, Beschreibung, Pfad). */
@@ -722,13 +814,13 @@ class HacsLabPanel extends HTMLElement {
 
   /**
    * Die vier Abschnitte des Ladens -- jede Zeile genau einmal:
-   * aktualisierbar (installiert, aber neueste weicht ab), installierbar
-   * (beobachtet, nichts installiert), downloadbar (installiert und
-   * oben), neu (Funde der Suche, noch nicht aufgenommen).
+   * aktualisierbar (installiert, aber neueste weicht ab), installiert
+   * (heruntergeladen und oben), downloadbar (beobachtet, nichts
+   * heruntergeladen), neu (Funde der Suche, noch nicht aufgenommen).
    */
   _gruppen() {
     const aktualisierbar = [];
-    const installierbar = [];
+    const installiert = [];
     const downloadbar = [];
     for (const e of this._eintraege) {
       if (!this._passt(e)) {
@@ -737,16 +829,23 @@ class HacsLabPanel extends HTMLElement {
       const update_da = e.neueste && e.installiert !== e.neueste;
       if (e.installiert && update_da) {
         aktualisierbar.push(e);
-      } else if (!e.installiert) {
-        installierbar.push(e);
+      } else if (e.installiert) {
+        installiert.push(e);
       } else {
         downloadbar.push(e);
       }
     }
-    const neu = (this._funde || []).filter((f) => this._passt(f));
+    const neu = [];
+    for (const host of Object.keys(this._funde_pro_host)) {
+      for (const fund of this._funde_pro_host[host]) {
+        if (this._passt(fund)) {
+          neu.push(fund);
+        }
+      }
+    }
     return {
       aktualisierbar: this._sortiere(aktualisierbar),
-      installierbar: this._sortiere(installierbar),
+      installiert: this._sortiere(installiert),
       neu: this._sortiere(neu),
       downloadbar: this._sortiere(downloadbar),
     };
@@ -823,8 +922,12 @@ class HacsLabPanel extends HTMLElement {
     const gruppen = this._gruppen();
     const gesamt =
       gruppen.aktualisierbar.length +
-      gruppen.installierbar.length +
+      gruppen.installiert.length +
       gruppen.downloadbar.length;
+    const stand = uhr_kurz(neuester_stand(this._aktualisiert_am));
+    const stand_zeile = stand
+      ? ` · ${fliehe(t.stand)} ${fliehe(stand)}`
+      : "";
     const werkzeug = `
       <div class="hl-werkzeug">
         <label class="hl-sortierung">
@@ -835,7 +938,7 @@ class HacsLabPanel extends HTMLElement {
             <option value="datum" ${this._sort === "datum" ? "selected" : ""}>${fliehe(t.sort.datum)}</option>
           </select>
         </label>
-        <span class="hl-zaehler-zeile">${fliehe(t.anzahl(gesamt))}${this._beschaeftigt ? ` · ${fliehe(t.frisch_laeuft)}` : ""}</span>
+        <span class="hl-zaehler-zeile">${fliehe(t.anzahl(gesamt))}${stand_zeile}${this._beschaeftigt ? ` · ${fliehe(t.frisch_laeuft)}` : ""}</span>
       </div>`;
     const meldung = Object.keys(this._instanz_fehler).length
       ? `<div class="hl-banner">${WARN_SVG}<span>${fliehe(
@@ -898,6 +1001,23 @@ class HacsLabPanel extends HTMLElement {
       </div>`;
   }
 
+  /** Das Zeichen einer Karte: Bild, oder Buchstabe statt kaputtem Bild. */
+  _avatar_html(zeile) {
+    const name = String(zeile.name || zeile.full_name || "?").trim();
+    const bloss = name.replace(/[*](lab|forge)$/i, "");
+    const buchstabe = fliehe(
+      (bloss.charAt(0) || "?").toUpperCase()
+    );
+    const adresse = String(zeile.avatar_url || "");
+    if (adresse && adresse_ok(adresse)) {
+      return (
+        `<img class="hl-avatar" src="${fliehe(adresse)}" alt="" loading="lazy"` +
+        ` data-buchstabe="${buchstabe}">`
+      );
+    }
+    return `<span class="hl-avatar hl-avatar-buchstabe" aria-hidden="true">${buchstabe}</span>`;
+  }
+
   _html_zeile_eintrag(e) {
     const t = this._t;
     const update_da = e.neueste && e.installiert !== e.neueste;
@@ -908,6 +1028,7 @@ class HacsLabPanel extends HTMLElement {
       </span>`;
     return `
       <div class="hl-karte">
+        ${this._avatar_html(e)}
         <div class="hl-karte-haupt">
           <div class="hl-karte-kopf" data-aktion="details" data-host="${fliehe(e.host)}" data-pfad="${fliehe(e.pfad)}" title="${fliehe(t.details)}">
             <span class="hl-name">${fliehe(e.name)}</span>
@@ -946,10 +1067,12 @@ class HacsLabPanel extends HTMLElement {
 
   _html_zeile_fund(f) {
     const t = this._t;
+    const host = f.host || this._scan_host;
     return `
       <div class="hl-karte ${f.vorhanden ? "schon-da" : ""}">
+        ${this._avatar_html(f)}
         <div class="hl-karte-haupt">
-          <div class="hl-karte-kopf" data-aktion="details" data-host="${fliehe(this._scan_host)}" data-pfad="${fliehe(f.full_name)}" title="${fliehe(t.details)}">
+          <div class="hl-karte-kopf" data-aktion="details" data-host="${fliehe(host)}" data-pfad="${fliehe(f.full_name)}" title="${fliehe(t.details)}">
             <span class="hl-name">${fliehe(f.name)}</span>
             <span class="hl-kategorie">${fliehe(f.kategorie)}</span>
           </div>
@@ -976,7 +1099,7 @@ class HacsLabPanel extends HTMLElement {
                        ).join("")}
                      </select>
                    </label>
-                   <button class="hl-knopf hl-primaer" data-aktion="hinzufuegen" data-host="${fliehe(this._scan_host)}" data-pfad="${fliehe(f.full_name)}" ${this._beschaeftigt ? "disabled" : ""}>${fliehe(t.hinzufuegen)}</button>`
+                   <button class="hl-knopf hl-primaer" data-aktion="hinzufuegen" data-host="${fliehe(host)}" data-pfad="${fliehe(f.full_name)}" ${this._beschaeftigt ? "disabled" : ""}>${fliehe(t.hinzufuegen)}</button>`
                 : `<span class="hl-schon-da">✗</span>`
           }
         </div>
@@ -1024,18 +1147,21 @@ class HacsLabPanel extends HTMLElement {
     return `
       <div class="hl-detail">
         <div class="hl-karte">
-          <div class="hl-karte-kopf">
-            <span class="hl-name">${fliehe(info.name || info.full_name)}</span>
+          ${this._avatar_html({ name: info.name || info.full_name, avatar_url: info.avatar_url })}
+          <div class="hl-karte-haupt">
+            <div class="hl-karte-kopf">
+              <span class="hl-name">${fliehe(info.name || info.full_name)}</span>
+            </div>
+            ${info.beschreibung ? `<div class="hl-beschreibung">${fliehe(info.beschreibung)}</div>` : ""}
+            <div class="hl-unterzeile">
+              <span class="hl-zahlen">
+                <span title="${fliehe(String(info.sterne))} ${fliehe(sterne_wort)}"><ha-icon icon="mdi:star-outline"></ha-icon> ${fliehe(String(info.sterne))}</span>
+                <span title="${fliehe(t.tickets)}"><ha-icon icon="mdi:alert-circle-outline"></ha-icon> ${fliehe(String(info.offene_tickets))}</span>
+              </span>
+              ${info.archiviert ? `<span class="hl-vorab">⚠</span>` : ""}
+            </div>
+            ${verweise ? `<div class="hl-verweise">${verweise}</div>` : ""}
           </div>
-          ${info.beschreibung ? `<div class="hl-beschreibung">${fliehe(info.beschreibung)}</div>` : ""}
-          <div class="hl-unterzeile">
-            <span class="hl-zahlen">
-              <span title="${fliehe(String(info.sterne))} ${fliehe(sterne_wort)}"><ha-icon icon="mdi:star-outline"></ha-icon> ${fliehe(String(info.sterne))}</span>
-              <span title="${fliehe(t.tickets)}"><ha-icon icon="mdi:alert-circle-outline"></ha-icon> ${fliehe(String(info.offene_tickets))}</span>
-            </span>
-            ${info.archiviert ? `<span class="hl-vorab">⚠</span>` : ""}
-          </div>
-          ${verweise ? `<div class="hl-verweise">${verweise}</div>` : ""}
         </div>
         ${readme}
         ${releases}
@@ -1047,6 +1173,19 @@ class HacsLabPanel extends HTMLElement {
     const wurzel = this;
     const $ = (sel) => wurzel.querySelector(sel);
     const $$ = (sel) => Array.from(wurzel.querySelectorAll(sel));
+
+    // Ein Zeichen, das nicht kommen will, wird zum Buchstaben -- nie
+    // zum kaputten Bild (Flug 2084). Der Fallback sitzt als Zuhoerer,
+    // nicht als Inline-Attribut: CSP laesst Inline-Handler kalt.
+    for (const bild of $$(".hl-avatar[data-buchstabe]")) {
+      bild.addEventListener("error", () => {
+        const ersatz = document.createElement("span");
+        ersatz.className = "hl-avatar hl-avatar-buchstabe";
+        ersatz.setAttribute("aria-hidden", "true");
+        ersatz.textContent = bild.dataset.buchstabe || "?";
+        bild.replaceWith(ersatz);
+      });
+    }
 
     // Karten-Koepfe sind keine Buttons -- jeder Traeger mit data-aktion hoert zu.
     for (const knopf of $$('[data-aktion]')) {
@@ -1237,12 +1376,20 @@ const STIL = `
 /* -- Karten: GitLaws Zeilen -- kompakt, Rand statt Schatten */
 .hl-karte { display: flex; gap: 12px; background: var(--card-background-color, #fff);
   border: 1px solid rgba(127, 127, 127, .35); border-radius: 4px;
-  padding: 12px 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  padding: 12px 14px; margin-bottom: 8px; flex-wrap: wrap; align-items: flex-start; }
 .hl-karte:hover { border-color: rgba(127, 127, 127, .6); }
 .hl-karte.schon-da { opacity: .55; }
+
+/* -- Das Zeichen der Karte (Flug 2084): Bild oder Buchstabe */
+.hl-avatar { width: 38px; height: 38px; border-radius: 6px; flex: 0 0 auto;
+  object-fit: cover; background: var(--card-background-color, #fff); }
+.hl-avatar-buchstabe { display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(127, 127, 127, .18); color: var(--primary-text-color);
+  font-weight: 600; font-size: 16px; user-select: none; }
+
 .hl-karte-haupt { flex: 1 1 340px; min-width: 0; }
 .hl-karte-kopf { display: flex; align-items: baseline; gap: 10px; cursor: pointer; }
-.hl-name { font-size: 15px; font-weight: 600; color: var(--hl-lila);
+.hl-name { font-size: 15px; font-weight: 600; color: var(--primary-text-color);
   word-break: break-all; }
 .hl-karte-kopf:hover .hl-name { text-decoration: underline; }
 .hl-kategorie { font-size: 11.5px; color: var(--secondary-text-color);
@@ -1283,9 +1430,9 @@ const STIL = `
 /* -- Das Detail: Karte, Datei-Rahmen fuer die Beschreibung, Releases */
 .hl-detail .hl-beschreibung { font-size: 14px; }
 .hl-verweise { display: flex; gap: 14px; padding: 10px 0 2px; flex-wrap: wrap; }
-.hl-verweise a { color: var(--hl-lila); text-decoration: none; font-size: 14px;
-  font-weight: 500; }
-.hl-verweise a:hover { text-decoration: underline; }
+.hl-verweise a { color: var(--primary-text-color); text-decoration: underline;
+  font-size: 14px; font-weight: 500; }
+.hl-verweise a:hover { text-decoration: none; }
 .hl-datei { border: 1px solid rgba(127, 127, 127, .35); border-radius: 4px;
   margin: 16px 0; overflow: hidden; background: var(--card-background-color, #fff); }
 .hl-datei-kopf { background: rgba(127, 127, 127, .12); padding: 10px 14px;
@@ -1299,14 +1446,14 @@ const STIL = `
 .hl-readme code { font-family: var(--code-font-family, monospace); font-size: 13px; }
 .hl-readme blockquote { border-left: 3px solid var(--hl-lila); margin: 8px 0;
   padding: 4px 12px; opacity: .85; }
-.hl-readme a { color: var(--hl-lila); }
+.hl-readme a { color: var(--primary-text-color); text-decoration: underline; }
 .hl-releases .hl-release { background: var(--card-background-color, #fff);
   border: 1px solid rgba(127, 127, 127, .35); border-radius: 4px;
   padding: 12px 16px; margin-bottom: 8px; }
 .hl-release-kopf { display: flex; align-items: baseline; gap: 10px; }
 .hl-release-tag { font-weight: 600; font-size: 14.5px;
-  background: rgba(107, 79, 187, .12); color: var(--hl-lila); border-radius: 4px;
-  padding: 1px 8px; }
+  background: rgba(127, 127, 127, .15); color: var(--primary-text-color);
+  border-radius: 4px; padding: 1px 8px; }
 .hl-release-datum { margin-left: auto; font-size: 12px;
   color: var(--secondary-text-color); }
 .hl-vorab { font-size: 11px; border: 1px solid rgba(127, 127, 127, .4);
