@@ -50,6 +50,7 @@ def _zu_info(roh: dict) -> RepositoryInfo:
         # an die Projekt-Adresse. Anbieterwissen bleibt hier, nirgendwo sonst.
         tickets_url=(web + "/-/issues") if web else "",
         releases_url=(web + "/-/releases") if web else "",
+        avatar_url=str(roh.get("avatar_url") or ""),
     )
 
 

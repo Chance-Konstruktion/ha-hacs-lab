@@ -122,6 +122,24 @@ async def test_stammdaten_nennen_die_web_ansichten():
     assert info.releases_url == ""
 
 
+@pytest.mark.asyncio
+async def test_stammdaten_nennen_das_bildzeichen():
+    """Flug 2084: das Zeichen des Projekts -- oder leer, nie geraten.
+
+    Der Laden zeigt die Zeichen seiner Karten; fehlt das Bild (keins
+    hochgeladen, Feld abwesend), bleibt das Feld leer und die Ober-
+    flaeche faellt auf einen Buchstaben zurueck.
+    """
+    mit_bild = projekt()
+    mit_bild["avatar_url"] = "https://gitlab.example.net/uploads/bar.png"
+    info = await forge(json_antworten={"/projects/": mit_bild}).repository("foo/bar")
+    assert info.avatar_url == "https://gitlab.example.net/uploads/bar.png"
+
+    bloss = projekt()
+    info = await forge(json_antworten={"/projects/": bloss}).repository("foo/bar")
+    assert info.avatar_url == ""
+
+
 # -- Stufe M8: Stammdaten ueber die ID --------------------------------
 @pytest.mark.asyncio
 async def test_stammdaten_nach_id_oeffnen_dasselbe_tor():

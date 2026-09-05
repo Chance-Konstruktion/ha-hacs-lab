@@ -38,6 +38,7 @@ def forgejo_repo(
     stars=7,
     issues=2,
     archived=False,
+    avatar_url="",
 ):
     """Ein Forgejo-Projektdatensatz, wie API v1 ihn liefert."""
     return {
@@ -50,6 +51,7 @@ def forgejo_repo(
         "open_issues_count": issues,
         "archived": archived,
         "html_url": "https://" + HOST + "/" + full_name,
+        "avatar_url": avatar_url,
     }
 
 
@@ -82,6 +84,22 @@ async def test_stammdaten_kommen_vollstaendig_an():
     assert info.topics == ("hacs",)
     assert info.archiviert is False
     assert info.web_url == "https://" + HOST + "/foo/bar"
+
+
+@pytest.mark.asyncio
+async def test_stammdaten_nennen_das_bildzeichen():
+    """Flug 2084: das Zeichen des Projekts -- oder leer, nie geraten."""
+    http = FakeHttp(
+        json_antworten={
+            "/repos/foo/bar": forgejo_repo(avatar_url="https://" + HOST + "/avatars/42")
+        }
+    )
+    info = await ForgejoForge(http, HOST).repository("foo/bar")
+    assert info.avatar_url == "https://" + HOST + "/avatars/42"
+
+    http = FakeHttp(json_antworten={"/repos/": forgejo_repo()})
+    info = await ForgejoForge(http, HOST).repository("foo/bar")
+    assert info.avatar_url == ""
 
 
 @pytest.mark.asyncio

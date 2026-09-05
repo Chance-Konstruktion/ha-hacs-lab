@@ -56,9 +56,8 @@ def herzschlag() -> Aufzeichnung:
     return Aufzeichnung(text="[]", kopfzeilen={})
 
 
-def projekt_antwort(
-    full_name: str = "foo/bar", pid: str = "789012", **rest
-) -> Aufzeichnung:
+def projekt_daten(full_name: str = "foo/bar", pid: str = "789012", **rest) -> dict:
+    """Der rohe GitLab-Projektdatensatz -- fuer Einzelne und fuer Listen."""
     daten = {
         "id": pid,
         "path_with_namespace": full_name,
@@ -71,7 +70,15 @@ def projekt_antwort(
         "web_url": "https://" + HOST + "/" + full_name,
     }
     daten.update(rest)
-    return Aufzeichnung(text=json.dumps(daten), kopfzeilen={})
+    return daten
+
+
+def projekt_antwort(
+    full_name: str = "foo/bar", pid: str = "789012", **rest
+) -> Aufzeichnung:
+    return Aufzeichnung(
+        text=json.dumps(projekt_daten(full_name, pid, **rest)), kopfzeilen={}
+    )
 
 
 def releases_objekt(tag: str, beschreibung: str = "") -> dict:
@@ -168,11 +175,15 @@ async def test_panel_ist_ohne_yaml_angemeldet(
     # Flug 2083: der Laden traegt GitLabs Tracht -- der Tanuki im Balken
     # (vier farbige Pfade), der Rueckhalt fuer die Seitenleiste, die
     # einklappbaren Abschnitte und das Erneuern beim Betreten.
+    # Flug 2084: das Lager malt sofort (eintraege ohne Netzruf), die
+    # Karten tragen Zeichen, und der Hintergrund feuert sein Ereignis.
     assert "#E24329" in koerper
     assert "#FC6D26" in koerper
     assert "customIconsets" in koerper
     assert "hacs_lab/erneuern" in koerper
-    for schlussel in ("aktualisierbar", "installierbar", "neu", "downloadbar"):
+    assert "hacs_lab_aktualisiert" in koerper
+    assert "avatar" in koerper
+    for schlussel in ("aktualisierbar", "installiert", "neu", "downloadbar"):
         assert schlussel in koerper
 
     # Das Iconset wird neben der Panel-Datei eigenen Weg geliefert.
@@ -213,22 +224,32 @@ async def test_erneuern_auf_leerer_instanz(
 
     Instanzen ohne Eintraege hatten nie eine update-Entity -- also auch
     keinen Aktualisierer. ``erneuern`` legt ihn idempotent an; der Lauf
-    ueber eine leere Liste fragt keine Aufzeichnung.
+    ueber eine leere Liste fragt keine Stammdaten. Dafuer durchsucht der
+    Lager-Lauf (Flug 2084) die Instanz -- eine leere Suche ist eine
+    Antwort, kein Fehler.
     """
     hass_storage["hacs_lab." + HOST.replace(".", "_")] = {
         "version": 1,
         "data": {"eintraege": [], "stand": {}},
     }
-    attrappe = sitzung_einpflanzen([herzschlag()])
+    attrappe = sitzung_einpflanzen(
+        [
+            herzschlag(),  # Richten
+            Aufzeichnung(text="[]", kopfzeilen={}),  # Lager: die Suche
+        ]
+    )
     await richten(hass, mock_eintrag())
     client = await hass_ws_client(hass)
 
     antwort = await frage(client, 1, "hacs_lab/erneuern")
     assert antwort["success"]
     assert antwort["result"]["eintraege"] == []
+    assert antwort["result"]["funde"] == []
     assert antwort["result"]["gescheitert"] == {}
-    # Kein einziger Ruf ging ueber die Reihe hinaus -- der Lauf war leer.
-    assert len(attrappe.abrufe) == 1  # der Herzschlag beim Richten
+    # Der Stand des Lagers steht in der Antwort -- das Panel zeigt ihn.
+    assert HOST in antwort["result"]["aktualisiert_am"]
+    # Kein einziger Ruf ging ueber die Reihe hinaus.
+    assert len(attrappe.abrufe) == 2  # Herzschlag und die Suche
 
 
 async def test_erneuern_liefert_den_frischen_fund(
@@ -239,6 +260,10 @@ async def test_erneuern_liefert_den_frischen_fund(
     Die Liste haengt sonst am Takt des Aktualisierers -- Minuten oder
     Stunden. ``erneuern`` dreht jeden herum: der Fund aus dem frischen
     Lauf ist sofort da, und die scheiternde Instanz steht in der Antwort.
+
+    Flug 2084: die erste Frage (``eintraege``) baut das Lager einmal
+    live, danach speist sich die Liste daraus -- der erneuern-Lauf
+    fragt Zeilen ueber die ID und durchsucht die Instanz.
     """
     speichern(
         hass_storage,
@@ -250,10 +275,15 @@ async def test_erneuern_liefert_den_frischen_fund(
             herzschlag(),  # Herzschlag beim Richten
             stammdaten(),  # M8-2: Stammdaten zum ersten Lauf ueber die ID
             releases(release_objekt("v1.2.0")),  # erster Lauf: 1.2.0 ist oben
-            stammdaten(),  # Liste zeigen (eintraege) -- noch der alte Fund
+            stammdaten(),  # eintraege: Lager ist leer, einmal live bauen
             stammdaten(),  # erneuern: Stammdaten ueber die ID
             releases(release_objekt("v1.3.0", "Frisch")),  # erneuern: neuer Release
-            stammdaten(),  # erneuern: die Liste danach bauen
+            stammdaten(),  # erneuern: die Zeile ueber die ID
+            Aufzeichnung(  # erneuern: die Suche ueber die ganze Instanz
+                text=json.dumps([projekt_daten()]), kopfzeilen={}
+            ),
+            datei_antwort(json.dumps({"name": "Bar", "render_readme": True})),
+            releases(release_objekt("v1.3.0", "Frisch")),  # Suche: letzte Version
         ]
     )
     await richten(hass, mock_eintrag())
@@ -270,13 +300,22 @@ async def test_erneuern_liefert_den_frischen_fund(
     assert zeile["neueste"] == "1.3.0"
     assert zeile["installiert"] == "1.1.0"
     assert antwort["result"]["gescheitert"] == {}
+    # Der Scan ist mitgekommen: der Kandidat ist schon auf der Liste.
+    funde = antwort["result"]["funde"]
+    assert [f["full_name"] for f in funde] == ["foo/bar"]
+    assert funde[0]["vorhanden"] is True
 
     # Die update-Entity hat den frischen Fund auch schon uebernommen.
     ids = hass.states.async_entity_ids("update")
     frisch = hass.states.get(ids[0])
     assert frisch.attributes["latest_version"] == "1.3.0"
     assert frisch.state == "on"
-    assert len(attrappe.abrufe) == 7  # alle Aufzeichnungen, keine mehr, keine weniger
+    assert len(attrappe.abrufe) == 10  # alle Aufzeichnungen, keine mehr, keine weniger
+
+    # Nach dem Lauf kommt die Frage aus dem Speicher -- ohne Netzruf.
+    antwort = await frage(client, 3, "hacs_lab/eintraege")
+    assert antwort["result"]["eintraege"][0]["neueste"] == "1.3.0"
+    assert len(attrappe.abrufe) == 10
 
 
 async def test_erneuern_meldet_die_gescheiterte_instanz(
@@ -356,15 +395,26 @@ async def test_voller_durchgang_ohne_yaml(
         "version": 1,
         "data": {"eintraege": [], "stand": {}},
     }
+    # Flug 2084, neue Zaehlung: die Liste (eintraege) kommt nach dem
+    # ersten Griff aus dem Lager -- ohne eigenen Abruf. Dafuer fragt
+    # der Lager-Start beim Vorlauf um den Takt zuerst die Zeile ueber
+    # die ID und durchsucht dann die Instanz (Suche, hacs.json,
+    # letzte Version), bevor der Takt des Aktualisierers dran ist.
     attrappe = sitzung_einpflanzen(
         [
             herzschlag(),  # Herzschlag beim Richten
             projekt_antwort(),  # Hinzufuegen: Identitaet klaeren
             projekt_antwort(),  # M8-2: Stammdaten zum frischen Lauf ueber die ID
             releases(releases_objekt("v1.2.0")),  # frischer Fund zum frischen Eintrag
-            projekt_antwort(),  # Liste frisch zeigen
             releases(releases_objekt("v1.2.0")),  # M4b: Installationsquelle zuerst
             zip_aufzeichnung("v1.2.0"),  # Installieren
+            projekt_antwort(),  # Lager-Start: die Zeile ueber die ID
+            Aufzeichnung(  # Lager-Start: die Suche ueber die Instanz
+                text=json.dumps([projekt_daten()]),
+                kopfzeilen={},
+            ),
+            datei_antwort(json.dumps({"name": "Bar", "render_readme": True})),
+            releases(releases_objekt("v1.3.0", "Frisch")),  # Lager: letzte Version
             projekt_antwort(),  # M8-2: Stammdaten im Takt-Lauf ueber die ID
             releases(releases_objekt("v1.3.0", "Frisch")),  # neuer Release im Takt
             releases(releases_objekt("v1.3.0", "Frisch")),  # M4b: Installationsquelle
@@ -444,9 +494,16 @@ async def test_voller_durchgang_ohne_yaml(
 
     gespeichert = hass_storage["hacs_lab." + HOST.replace(".", "_")]["data"]
     assert gespeichert["eintraege"] == []
+    # Das Lager ist dem Eintrag gefolgt -- die Zeile ist weg, der Fund
+    # bleibt (als nicht mehr vorhanden) und wartet auf den naechsten Lauf.
+    lager = hass_storage["hacs_lab.lager." + HOST.replace(".", "_")]["data"]
+    assert lager["eintraege"] == []
+    assert [f["full_name"] for f in lager["funde"]] == ["foo/bar"]
+    assert lager["funde"][0]["vorhanden"] is False
     # Alle Aufzeichnungen verbraucht: kein Ruf ging ueber die Reihe hinaus
-    # (seit M8-2 fragt jeder Lauf zusaetzlich die Stammdaten ueber die ID).
-    assert len(attrappe.abrufe) == 11  # M4b: zwei zusaetzliche Release-Fragen
+    # (Flug 2084: die Liste fragt nichts mehr, der Lager-Start dafuer
+    # Zeile, Suche, hacs.json und letzte Version).
+    assert len(attrappe.abrufe) == 14
 
 
 # ----------------------------------------------------------------------

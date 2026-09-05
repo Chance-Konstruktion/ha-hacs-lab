@@ -74,6 +74,7 @@ def _zu_info(roh: dict) -> RepositoryInfo:
         offene_tickets=int(roh.get("open_issues_count") or 0),
         archiviert=bool(roh.get("archived")),
         web_url=roh.get("html_url") or "",
+        avatar_url=str(roh.get("avatar_url") or ""),
     )
 
 

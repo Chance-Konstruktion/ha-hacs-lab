@@ -53,6 +53,11 @@ class RepositoryInfo:
     web_url: str = ""
     tickets_url: str = ""
     releases_url: str = ""
+    #: Adresse des Bildzeichens des Projekts (Flug 2084: der Laden
+    #: zeigt die Zeichen seiner Karten). Anbieter ohne Bild lassen
+    #: das Feld leer; die Oberflaeche faellt auf einen Buchstaben
+    #: zurueck, nicht auf ein kaputtes Bild.
+    avatar_url: str = ""
 
 
 class HttpClient(Protocol):

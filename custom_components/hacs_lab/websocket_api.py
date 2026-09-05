@@ -5,11 +5,17 @@ der Welt: Diese Datei ist die ganze Schnittstelle zwischen beiden.
 Sieben Befehle, mehr braucht kein Laden:
 
 * ``hacs_lab/eintraege`` -- die Liste der beobachteten Repositories,
-  mit Stand (installiert), neuester Version, Sternen und Verweisen
+  aus dem Lager gelesen (Flug 2084): sofort, ohne einen einzigen
+  Netzruf. Steht das Lager noch leer (frische Einrichtung, der Start-
+  Lauf noch nicht geschehen), wird es einmal live gebaut und danach
+  ebenfalls aus dem Speicher gereicht. Funde, Stand und Instanzen
+  reisen mit.
 * ``hacs_lab/erneuern`` -- der frische Lauf: jeder Aktualisierer wird
-  jetzt herumgedreht, dann kommt dieselbe Liste wie oben (plus die
-  Instanzen, deren Lauf scheiterte). Die Bedienung ruft das, sobald
-  der Laden betreten wird -- die Liste haengt dann nicht am Takt.
+  herumgedreht, dann das Lager neu befuellt (Zeilen und Scan). Die
+  Bedienung ruft das, sobald der Laden betreten wird -- die Liste
+  haengt dann nicht am Takt. Scheiternde Teile reissen die Antwort
+  nicht um: die Instanz steht mit Grund in ``gescheitert``, die Liste
+  kommt trotzdem (aus dem letzten erfolgreichen Stand).
 * ``hacs_lab/entdecken`` -- der Scan aus Stufe M6: ganze Instanz oder
   Gruppe, Ergebnisliste mit allem, was die Oberflaeche zeigt
 * ``hacs_lab/detail`` -- Stammdaten, README und Releases eines
@@ -25,7 +31,9 @@ Sieben Befehle, mehr braucht kein Laden:
 Installieren und aktualisieren geht bewusst NICHT durch diese Datei:
 dafuer gibt es die update-Entities aus Stufe M5 mit ihrem
 install-Dienst. Das Panel ruft den ganz normalen Home-Assistant-Dienst
--- genau wie jede andere Oberflaeche auch.
+-- genau wie jede andere Oberflaeche auch. Die drei Befehle, die die
+Liste veraendern (hinzufuegen, entfernen, deinstallieren), pflegen das
+Lager gleich mit -- ohne Netz, die Stammdaten sind ja schon da.
 
 Bahn-Disziplin aus #13: ``config_flow.py`` und ``eintraege.py`` werden
 hier nicht angefasst, nur ihre oeffentlichen Stuecke aufgerufen. Der
@@ -41,7 +49,6 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 
 from .aktualisierer import hole_aktualisierer
 from .const import DOMAIN
@@ -53,9 +60,9 @@ from .eintraege import (
     BereitsVorhanden,
     KategorieUnbekannt,
     NichtVorhanden,
-    kategorie_aus_topics,
 )
 from .installation import InstallationsFehler, deinstalliere_version
+from .lager import LagerFehler, _entity_id, zeile_aus_fund
 from .neustart import neustart_hinweis
 
 if TYPE_CHECKING:
@@ -90,12 +97,6 @@ def _laufzeit_nach_host(hass: HomeAssistant, host: str) -> Laufzeit | None:
     return _laufzeiten(hass).get(host)
 
 
-def _entity_id(hass: HomeAssistant, storage_key: str) -> str | None:
-    """Die update-Entity eines Eintrags, wie Home Assistant sie nennt."""
-    registry = er.async_get(hass)
-    return registry.async_get_entity_id("update", "hacs_lab", storage_key)
-
-
 def _anzeigename(full_name: str, provider: str) -> str:
     """Der Name mit Kennzeichnung -- der Suffix gehoert dem Anbieter.
 
@@ -105,67 +106,38 @@ def _anzeigename(full_name: str, provider: str) -> str:
     return full_name + SUFFIX.get(provider, "")
 
 
-def _fund_anteil(laufzeit: Laufzeit, storage_key: str) -> dict[str, str]:
-    """Was der letzte Lauf zu diesem Eintrag wusste (leer, wenn nichts)."""
-    aktualisierer = getattr(laufzeit, "aktualisierer", None)
-    daten = aktualisierer.data if aktualisierer is not None else None
-    fund = (daten or {}).get(storage_key)
-    if fund is None or fund.fehler is not None:
-        return {}
-    return {
-        "neueste": fund.neueste,
-        "tag": fund.tag,
-        "veroeffentlicht_am": fund.veroeffentlicht_am,
-    }
-
-
 async def _liste(hass: HomeAssistant) -> dict[str, Any]:
-    """Die Antwort der Eintraege: alle Zeilen, alle Instanzen, Kategorien.
+    """Die Antwort der Eintraege: alles aus den Lagern, ohne Netz.
 
-    Zwei Befehle schicken sie -- ``eintraege`` direkt, ``erneuern`` nach
-    dem frischen Lauf. Der Bau gehoert zusammen, damit beide dasselbe
-    sagen: Sterne und Beschreibung frisch je Eintrag, der Stand aus der
-    Ablage, die neueste Version aus dem letzten Lauf des Aktualisierers.
+    Zwei Befehle schicken sie -- ``eintraege`` direkt, ``erneuern``
+    nach dem frischen Lauf. Beide greifen aufs Lager zu (Flug 2084):
+    was gestern geholt wurde, steht heute sofort da, auch nach dem
+    Neustart -- der Laden geht nicht mehr leer auf. Steht das Lager
+    noch leer, obwohl Eintraege da sind, wird es einmal live gebaut
+    (der ETag-Zwischenspeicher macht das wiederholt billig); danach
+    kommt alles aus dem Speicher. Funde und Zeitstempel reisen mit,
+    damit die Oberflaeche Alter und Herkunft zeigen kann.
     """
     zeilen: list[dict[str, Any]] = []
+    funde: list[dict[str, Any]] = []
+    staende_am: dict[str, str] = {}
     for host, laufzeit in sorted(_laufzeiten(hass).items()):
-        staende = getattr(laufzeit, "staende", None)
-        for eintrag in laufzeit.eintraege.alle():
-            zeile: dict[str, Any] = {
-                "storage_key": eintrag.storage_key,
-                "name": eintrag.anzeigename,
-                "pfad": eintrag.identitaet.full_name,
-                "kategorie": eintrag.kategorie,
-                "host": host,
-                "hinzugefuegt_am": eintrag.hinzugefuegt_am,
-                "entity_id": _entity_id(hass, eintrag.storage_key),
-            }
-            zeile.update(_fund_anteil(laufzeit, eintrag.storage_key))
-            stand = staende.stand(eintrag.storage_key) if staende is not None else None
-            zeile["installiert"] = stand.installiert if stand else ""
-            zeile["fehler"] = ""
-            try:
-                info = await laufzeit.forge.repository(eintrag.identitaet.full_name)
-            except Exception as fehler:  # noqa: BLE001 - ein Eintrag, keine Liste
-                zeile["fehler"] = str(fehler) or fehler.__class__.__name__
-                _LOGGER.debug(
-                    "Stammdaten zu %s gescheitert: %s",
-                    eintrag.anzeigename,
-                    zeile["fehler"],
-                )
-            else:
-                zeile["beschreibung"] = info.beschreibung
-                zeile["sterne"] = info.sterne
-                zeile["offene_tickets"] = info.offene_tickets
-                zeile["web_url"] = info.web_url
-                zeile["tickets_url"] = info.tickets_url
-                zeile["releases_url"] = info.releases_url
-            zeilen.append(zeile)
+        lager = getattr(laufzeit, "lager", None)
+        if lager is None:
+            continue
+        if not lager.zeilen and laufzeit.eintraege.alle():
+            await lager.live_uebernehmen()
+        zeilen.extend(lager.zeilen)
+        funde.extend(lager.funde)
+        if lager.aktualisiert_am:
+            staende_am[host] = lager.aktualisiert_am
 
     return {
         "eintraege": zeilen,
+        "funde": funde,
         "instanzen": sorted(_laufzeiten(hass)),
         "kategorien": list(KATEGORIEN),
+        "aktualisiert_am": staende_am,
     }
 
 
@@ -177,13 +149,13 @@ async def ws_eintraege(
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Die Liste alles Beobachteten, ueber alle Instanzen.
+    """Die Liste alles Beobachteten -- sofort, aus dem Lager.
 
-    Sterne und Beschreibung sind ein frischer Blick je Eintrag: was
-    gestern drei Sterne hatte, kann heute fuenf haben. Ein Fehler
-    dabei (Repository verschwunden, Netz weg) reisst die Liste nicht
-    mit -- der Eintrag erscheint mit Fehlertext, wie der Lauf aus
-    Stufe M5 ihn auch traegt.
+    Flug 2084: kein einziger Netzruf hier. Was das Lager kennt, steht
+    sofort da -- auch nach dem Neustart, auch ohne jeden Takt. Frische
+    Werte (Sterne, Beschreibung, Funde) bringt der naechste volle
+    Lauf, der beim Betritt oder im Takt geschieht und das Panel ueber
+    das Ereignis zum Neuzeichnen bringt.
     """
     connection.send_result(msg["id"], await _liste(hass))
 
@@ -196,18 +168,20 @@ async def ws_erneuern(
     connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Der frische Lauf: jeden Aktualisierer herumdrehen, dann die Liste.
+    """Der frische Lauf: Aktualisierer herumdrehen, Lager neu fuellen.
 
     Das Panel ruft das, sobald jemand den Laden betritt -- die Liste
     soll nicht am Takt haengen (der Minuten oder Stunden spaeter
-    schlaegt). Der Lauf ist derselbe wie im Takt: Stammdaten ueber die
-    ID, Kern-Lauf je Eintrag, Reparaturen. Instanzen ohne Aktualisierer
+    schlaegt). Der Lauf ist zweigeteilt: zuerst der M5-Lauf je
+    Instanz (Stammdaten ueber die ID, Kern-Lauf, Reparaturen), dann
+    der volle Lauf des Lagers (Zeilen ueber die ID, Scan der ganzen
+    Instanz, Speichern und Ereignis). Instanzen ohne Aktualisierer
     (leere Liste, nie eine update-Entity) bekommen ihren ersten --
     :func:`hole_aktualisierer` legt ihn idempotent an.
 
-    Ein scheiternder Lauf reisst die Antwort nicht um: die Instanz
+    Ein scheiternder Teil reisst die Antwort nicht um: die Instanz
     steht mit Grund in ``gescheitert``, die Liste kommt trotzdem (aus
-    dem letzten erfolgreichen Stand des Aktualisierers).
+    dem letzten erfolgreichen Stand des Lagers).
     """
     gescheitert: dict[str, str] = {}
     eintraege_karte: dict[str, Any] = hass.data.get(DOMAIN, {})
@@ -218,20 +192,28 @@ async def ws_erneuern(
         if eintrag is None:
             continue
         aktualisierer = hole_aktualisierer(hass, eintrag)
-        if aktualisierer is None:
-            continue
-        await aktualisierer.async_refresh()
-        if not aktualisierer.last_update_success:
-            gescheitert[laufzeit.forge.host] = (
-                str(aktualisierer.last_exception)
-                if aktualisierer.last_exception is not None
-                else "unerwarteter Fehler"
-            )
-            _LOGGER.warning(
-                "Frischer Lauf fuer %s gescheitert: %s",
-                laufzeit.forge.host,
-                gescheitert[laufzeit.forge.host],
-            )
+        if aktualisierer is not None:
+            await aktualisierer.async_refresh()
+            if not aktualisierer.last_update_success:
+                gescheitert[laufzeit.forge.host] = (
+                    str(aktualisierer.last_exception)
+                    if aktualisierer.last_exception is not None
+                    else "unerwarteter Fehler"
+                )
+                _LOGGER.warning(
+                    "Frischer Lauf fuer %s gescheitert: %s",
+                    laufzeit.forge.host,
+                    gescheitert[laufzeit.forge.host],
+                )
+        lager = getattr(laufzeit, "lager", None)
+        if lager is not None:
+            try:
+                await lager.voller_lauf()
+            except LagerFehler as fehler:
+                gescheitert.setdefault(laufzeit.forge.host, str(fehler))
+                _LOGGER.warning(
+                    "Lager-Lauf fuer %s gescheitert: %s", laufzeit.forge.host, fehler
+                )
 
     antwort = await _liste(hass)
     antwort["gescheitert"] = gescheitert
@@ -278,26 +260,7 @@ async def ws_entdecken(
         connection.send_error(msg["id"], "forge_fehler", str(fehler))
         return
 
-    ergebnis: list[dict[str, Any]] = []
-    for fund in funde:
-        info = fund.info
-        ergebnis.append(
-            {
-                "full_name": info.full_name,
-                "name": fund.anzeigename,
-                "beschreibung": info.beschreibung,
-                "sterne": info.sterne,
-                "offene_tickets": info.offene_tickets,
-                "letzte_version": fund.letzte_version,
-                "kategorie": kategorie_aus_topics(info.topics) or "integration",
-                "gueltig": fund.befund.gueltig,
-                "fehler": "; ".join(fund.befund.fehler),
-                "vorhanden": laufzeit.eintraege.vorhanden(fund.identitaet.storage_key),
-                "web_url": info.web_url,
-                "tickets_url": info.tickets_url,
-                "releases_url": info.releases_url,
-            }
-        )
+    ergebnis = [zeile_aus_fund(laufzeit, fund) for fund in funde]
     connection.send_result(msg["id"], {"funde": ergebnis})
 
 
@@ -379,6 +342,7 @@ async def ws_detail(
                 "web_url": info.web_url,
                 "tickets_url": info.tickets_url,
                 "releases_url": info.releases_url,
+                "avatar_url": info.avatar_url,
             },
             "readme": readme,
             "readme_datei": readme_datei,
@@ -449,6 +413,11 @@ async def ws_hinzufuegen(
     # Der Beobachter aus Stufe M5 legt die update-Entity gleich an; noch
     # einen Herzschlag warten, dann kennt die Registry die Nummer.
     await hass.async_block_till_done()
+    # Flug 2084: der neue Eintrag steht sofort im Lager -- die Stammdaten
+    # sind schon geholt, kein weiterer Ruf noetig.
+    lager = getattr(laufzeit, "lager", None)
+    if lager is not None:
+        await lager.zeile_hinzu(eintrag, info)
     connection.send_result(
         msg["id"],
         {
@@ -495,6 +464,9 @@ async def ws_entfernen(
             "Custom Repository ueber die Oberflaeche entfernt: %s",
             entfernt.anzeigename,
         )
+        lager = getattr(laufzeit, "lager", None)
+        if lager is not None:
+            await lager.zeile_weg(entfernt)
         connection.send_result(
             msg["id"], {"entfernt": entfernt.anzeigename, "host": laufzeit.forge.host}
         )
@@ -552,6 +524,9 @@ async def ws_deinstallieren(
             )
             return
         await laufzeit.staende.setzen(schluessel, installiert="", pfad="")
+        lager = getattr(laufzeit, "lager", None)
+        if lager is not None:
+            await lager.stand_geaendert(schluessel, installiert="")
         neustart_hinweis(hass, eintrag, stand.installiert, "deinstallation")
         _LOGGER.info(
             "Custom Repository ueber die Oberflaeche deinstalliert: %s",

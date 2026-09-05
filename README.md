@@ -86,12 +86,21 @@ by hand. It takes about two minutes.
 ## Using HACS*lab
 
 - **The panel:** one page, collapsible sections like the HACS store —
-  *Updatable*, *Installable*, *New* (scan findings), *Downloadable* —
+  *Updatable*, *Installed*, *New* (scan findings), *Downloadable* —
   each header counting its cards. The top bar follows your GitLab:
   tanuki mark, a "Search or go to …" field, refresh and add tools,
-  breadcrumbs in the detail view. Opening the panel triggers a fresh
-  update check on every instance (`hacs_lab/erneuern`) — the list
-  never waits for the heartbeat interval.
+  breadcrumbs in the detail view. Cards carry their project's avatar
+  (or a letter when a project has none). Names follow your theme's
+  text colour — white in dark mode, black in light mode.
+- **Never an empty store:** the list lives in the *Lager*, a per-instance
+  cache in Home Assistant's storage (`hacs_lab.lager.<host>`). Opening
+  the panel paints from that cache instantly (no network round-trip),
+  then runs the fresh check in the background and re-renders when it
+  lands. After a restart the cache is read while Home Assistant is
+  still booting; the first background run follows shortly, and the
+  same interval you set for the heartbeat keeps the cache fresh —
+  `hacs_lab_aktualisiert` events repaint the panel while it stays
+  open. The refresh button still forces a run at any time.
 - **Add a custom repository:** open the panel, choose *Add*, paste the
   project URL, pick a category. HACS*lab reads the metadata, the version,
   and offers the install.
@@ -165,6 +174,8 @@ hacs.json                     repository conventions for HACS*lab itself
 custom_components/hacs_lab/   the integration — thin Home Assistant layer
   manifest.json               domain, version, config flow, icon
   config_flow.py              setup dialog with connection check
+  lager.py                    the store cache: persisted list + scan,
+                              background interval, `hacs_lab_aktualisiert`
   frontend/panel.js           the sidebar panel (no YAML) — GitLab-style
   frontend/iconset.js         the tanuki as sidebar icon (own icon
                               collection `hacs-lab`, on every page)
