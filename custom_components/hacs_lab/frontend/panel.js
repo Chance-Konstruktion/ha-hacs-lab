@@ -289,18 +289,180 @@ function inline_markdown(s) {
   return t;
 }
 
+/** Void-Tags: stehen allein, ohne Schliesser. */
+const VOID_TAGS = new Set([
+  "br", "hr", "img", "input", "meta", "link", "col", "area", "base",
+  "embed", "source", "track", "wbr",
+]);
+
+/** Gaenzlich verbotene Tags: Skripte, Rahmen, Formen -- weg, samt Inhalt. */
+const HTML_VERBOTEN = new Set([
+  "script", "style", "iframe", "object", "embed", "form", "input",
+  "button", "select", "textarea", "template", "noscript", "svg", "math",
+  "frame", "frameset", "applet", "video", "audio", "canvas",
+]);
+
+/** Erlaubte Tags im README -- der Rest verliert seine Huelle, der Inhalt bleibt. */
+const HTML_ERLAUBT = new Set([
+  "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption",
+  "colgroup", "col", "div", "span", "p", "br", "hr",
+  "h1", "h2", "h3", "h4", "h5", "h6",
+  "ul", "ol", "li", "dl", "dt", "dd", "blockquote", "center",
+  "details", "summary", "figure", "figcaption",
+  "b", "i", "u", "s", "strong", "em", "small", "sub", "sup",
+  "code", "pre", "kbd", "samp", "var", "mark", "del", "ins", "abbr",
+  "cite", "a", "img",
+]);
+
+/** Attribute je Tag -- nur diese reisen mit, Adressen nur http(s). */
+const ATTR_PRO_TAG = {
+  a: ["href", "title"],
+  img: ["src", "alt", "title", "width", "height"],
+  td: ["colspan", "rowspan", "align", "width"],
+  th: ["colspan", "rowspan", "align", "width"],
+  table: ["align", "border", "width", "summary"],
+  details: ["open"],
+  abbr: ["title"],
+};
+
+function html_attribute(node) {
+  const tag = node.tagName.toLowerCase();
+  const erlaubt = ATTR_PRO_TAG[tag];
+  let raus = "";
+  if (erlaubt) {
+    for (const name of erlaubt) {
+      const wert = node.getAttribute(name);
+      if (wert === null || wert === undefined || wert === "") {
+        continue;
+      }
+      if ((name === "href" || name === "src") && !adresse_ok(String(wert))) {
+        continue;
+      }
+      raus += ` ${name}="${fliehe(String(wert))}"`;
+    }
+  }
+  if (tag === "a" && adresse_ok(node.getAttribute("href") || "")) {
+    raus += ' target="_blank" rel="noopener noreferrer"';
+  }
+  return raus;
+}
+
+function html_sauber(node) {
+  if (node.nodeType === 3) {
+    return inline_markdown(fliehe(node.nodeValue || ""));
+  }
+  if (node.nodeType !== 1) {
+    return "";
+  }
+  const tag = node.tagName.toLowerCase();
+  if (HTML_VERBOTEN.has(tag)) {
+    return "";
+  }
+  // Ein Bild ohne taugliche Adresse ist keine Zierde, nur Muell --
+  // es faellt ganz weg (javascript: und Verwandte erreichen so nie
+  // den Laden).
+  if (tag === "img" && !adresse_ok(node.getAttribute("src") || "")) {
+    return "";
+  }
+  const kinder = [...node.childNodes].map(html_sauber).join("");
+  if (!HTML_ERLAUBT.has(tag)) {
+    return kinder;
+  }
+  if (VOID_TAGS.has(tag)) {
+    return `<${tag}${html_attribute(node)}>`;
+  }
+  return `<${tag}${html_attribute(node)}>${kinder}</${tag}>`;
+}
+
+/**
+ * Ein HTML-Block aus dem README, gesaeubert (Flug 2096, Wunde 1).
+ *
+ * Die Tabellen und der Schmuck vieler HACS-READMEs kommen als HTML --
+ * bislang standen sie als Roh-Text im Laden. Der Sauberer nimmt den
+ * Block auseinander (DOMParser) und setzt ihn aus der Whitelist
+ * wieder zusammen: Skripte und Rahmen fallen ganz weg, unbekannte
+ * Huellen verlieren nur ihre Schale, Adressen duerfen http(s) sein,
+ * und Inline-Markdown laeuft ueber die Textknoten wie ueberall.
+ */
+function html_block(zeilen) {
+  try {
+    const doc = new DOMParser().parseFromString(zeilen.join("\n"), "text/html");
+    return [...doc.body.childNodes].map(html_sauber).join("");
+  } catch (fehler) {
+    return zeilen.map(fliehe).join("\n");
+  }
+}
+
 /**
  * Der Kleinstrenderer: Ueberschriften, Listen, Zitate, Code-Bloecke,
- * Trennlinien, Absaetze plus Inline-Markdown. Kein HTML geht unver-
- * wandelt durch -- alles kommt geflohen rein.
+ * Trennlinien, Absaetze plus Inline-Markdown. HTML-Bloecke (Tabellen
+ * und Schmuck vieler HACS-READMEs) gehen seit Flug 2096 durch den
+ * Sauberer -- Whitelist, keine Skripte, nur http(s)-Adressen --;
+ * alles andere kommt geflohen rein, wie immer.
  */
 function markdown(text) {
   if (!text) return "";
-  const zeilen = fliehe(text).split(/\r?\n/);
+  const rohzeilen = String(text).split(/\r?\n/);
+
+  // Vorab-Zerlegung (Flug 2096): Codezaeune schuetzen ihren Inhalt
+  // vor der HTML-Erkennung -- ein ```-Beispiel mit <table> darin bleibt
+  // Code. Ein HTML-Block beginnt mit einem oeffnenden Tag und endet mit
+  // dessen Schliesser; Void-Tags stehen allein. Zwischen den Zeilen
+  // eines Blocks darf alles stehen (auch Leerzeilen und Fliesstext),
+  // denn Textknoten kriegen ohnehin Inline-Markdown.
+  const teile = []; // { art: "md", zeile } | { art: "fertig", html }
+  let code = null;
+  let html = null; // { zeilen: [...], tag: "table" }
+  for (const roh of rohzeilen) {
+    if (code !== null) {
+      if (/^\s*```/.test(roh)) {
+        teile.push({
+          art: "fertig",
+          html: `<pre><code>${fliehe(code.join("\n"))}</code></pre>`,
+        });
+        code = null;
+      } else {
+        code.push(roh);
+      }
+      continue;
+    }
+    if (/^\s*```/.test(roh)) {
+      code = [];
+      continue;
+    }
+    if (html !== null) {
+      html.zeilen.push(roh);
+      if (new RegExp(`</${html.tag}\\s*>`, "i").test(roh)) {
+        teile.push({ art: "fertig", html: html_block(html.zeilen) });
+        html = null;
+      }
+      continue;
+    }
+    const eroeffner = roh.match(/^\s*<([a-zA-Z][a-zA-Z0-9-]*)\b/);
+    if (eroeffner) {
+      const tag = eroeffner[1].toLowerCase();
+      if (VOID_TAGS.has(tag)) {
+        teile.push({ art: "fertig", html: html_block([roh]) });
+        continue;
+      }
+      html = { zeilen: [roh], tag };
+      continue;
+    }
+    teile.push({ art: "md", zeile: fliehe(roh) });
+  }
+  if (code !== null) {
+    teile.push({
+      art: "fertig",
+      html: `<pre><code>${fliehe(code.join("\n"))}</code></pre>`,
+    });
+  }
+  if (html !== null) {
+    teile.push({ art: "fertig", html: html_block(html.zeilen) });
+  }
+
   const stueck = [];
   let absatz = [];
   let modus = null; // null | "ul" | "ol" | "blockquote"
-  let code = null;
 
   const absatz_schliessen = () => {
     if (absatz.length) {
@@ -315,22 +477,14 @@ function markdown(text) {
     }
   };
 
-  for (const zeile of zeilen) {
-    if (code !== null) {
-      if (/^\s*```/.test(zeile)) {
-        stueck.push(`<pre><code>${code.join("\n")}</code></pre>`);
-        code = null;
-      } else {
-        code.push(zeile);
-      }
-      continue;
-    }
-    if (/^\s*```/.test(zeile)) {
+  for (const teil of teile) {
+    if (teil.art === "fertig") {
       absatz_schliessen();
       liste_schliessen();
-      code = [];
+      stueck.push(teil.html);
       continue;
     }
+    const zeile = teil.zeile;
     const kopf = zeile.match(/^(#{1,4})\s+(.*)$/);
     if (kopf) {
       absatz_schliessen();
@@ -385,9 +539,6 @@ function markdown(text) {
     } else {
       absatz.push(zeile.trim());
     }
-  }
-  if (code !== null) {
-    stueck.push(`<pre><code>${code.join("\n")}</code></pre>`);
   }
   liste_schliessen();
   absatz_schliessen();
@@ -1008,9 +1159,27 @@ class HacsLabPanel extends HTMLElement {
     // tragen). Jede andere Nadel greift wie ueberall: Name, Pfad, Text.
     const nadel = this._suche.trim().toLowerCase();
     const gruppen_wort = this._funde_von.trim().toLowerCase();
+    // Flug 2096, Wunde 2 aus dem 3-System-Test: ein Gesicht, ein Platz.
+    // Ein Fund, der schon Eintrag ist, bleibt NUR beim Eintrag --
+    // entweder Neu ODER Downloadbar ODER Installiert/Aktualisierbar,
+    // nie doppelt und nie dreifach. Der Server schickt in jedem Fund
+    // ein vorhanden-Faehnchen, und der eigene Abgleich greift, falls
+    // das Faehnchen fehlt.
+    const bereits = new Set(
+      this._eintraege.map(
+        (e) => (e.host || "") + "|" + (e.pfad || e.full_name || "")
+      )
+    );
     const neu = [];
     for (const host of Object.keys(this._funde_pro_host)) {
       for (const fund of this._funde_pro_host[host]) {
+        if (fund && fund.vorhanden) {
+          continue;
+        }
+        const name = fund.full_name || fund.pfad || "";
+        if (bereits.has((fund.host || host) + "|" + name)) {
+          continue;
+        }
         if (nadel && nadel !== gruppen_wort && !this._passt(fund)) {
           continue;
         }
@@ -1716,6 +1885,13 @@ const STIL = `
 .hl-readme blockquote { border-left: 3px solid var(--hl-lila); margin: 8px 0;
   padding: 4px 12px; opacity: .85; }
 .hl-readme a { color: var(--primary-text-color); text-decoration: underline; }
+/* Flug 2096: die HTML-Tabellen der HACS-READMEs -- dezent im Haus-Stil */
+.hl-readme table { border-collapse: collapse; margin: 10px 0; max-width: 100%;
+  display: block; overflow-x: auto; }
+.hl-readme td, .hl-readme th { border: 1px solid var(--divider-color, rgba(127, 127, 127, .25));
+  padding: 6px 10px; vertical-align: top; }
+.hl-readme ul, .hl-readme ol { padding-left: 22px; margin: 6px 0; }
+.hl-readme p { margin: 6px 0; }
 .hl-releases .hl-release { background: var(--card-background-color, #fff);
   border: 1px solid rgba(127, 127, 127, .35); border-radius: 4px;
   padding: 12px 16px; margin-bottom: 8px; }

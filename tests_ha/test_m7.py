@@ -503,6 +503,9 @@ async def test_voller_durchgang_ohne_yaml(
             projekt_antwort(),  # Hinzufuegen: Identitaet klaeren
             projekt_antwort(),  # M8-2: Stammdaten zum frischen Lauf ueber die ID
             releases(releases_objekt("v1.2.0")),  # frischer Fund zum frischen Eintrag
+            releases(
+                releases_objekt("v1.2.0")
+            ),  # Flug 2096: der erste Fund reist mit (Wunde 3a)
             releases(releases_objekt("v1.2.0")),  # M4b: Installationsquelle zuerst
             zip_aufzeichnung("v1.2.0"),  # Installieren
             projekt_antwort(),  # Lager-Start: die Zeile ueber die ID
@@ -599,8 +602,9 @@ async def test_voller_durchgang_ohne_yaml(
     assert lager["funde"][0]["vorhanden"] is False
     # Alle Aufzeichnungen verbraucht: kein Ruf ging ueber die Reihe hinaus
     # (Flug 2084: die Liste fragt nichts mehr, der Lager-Start dafuer
-    # Zeile, Suche, hacs.json und letzte Version).
-    assert len(attrappe.abrufe) == 14
+    # Zeile, Suche, hacs.json und letzte Version; Flug 2096 kam der
+    # erste Fund dazu, der mit dem Aufnehmen reist).
+    assert len(attrappe.abrufe) == 15
 
 
 # ----------------------------------------------------------------------
@@ -829,6 +833,7 @@ async def test_hinzufuegen_lehnt_fehler_ab(
             releases(
                 releases_objekt("v1.0.0")
             ),  # ... und der Beobachter schaut gleich nach
+            releases(releases_objekt("v1.0.0")),  # Flug 2096: der erste Fund reist mit
             projekt_antwort(),  # vierter Versuch: schon in der Liste
         ]
     )
@@ -884,3 +889,57 @@ async def test_entfernen_wenn_weg(
     antwort = await frage(client, 1, "hacs_lab/entfernen", storage_key="gitlab@x:1")
     assert not antwort["success"]
     assert antwort["error"]["code"] == "nicht_mehr_da"
+
+
+async def test_erster_fund_reist_mit(
+    hass: HomeAssistant,
+    sitzung_einpflanzen,
+    hass_ws_client,
+    hass_storage,
+) -> None:
+    """Flug 2096, Wunde 3a aus dem 3-System-Test.
+
+    Nach dem Hinzufuegen ist die neueste Version SOFORT da -- der erste
+    Fund reist mit dem Aufnehmen. Ohne ihn blieb ``latest_version`` leer
+    bis zum naechsten Takt, und ein sofortiger Install-Ruf endete in
+    Home Assistants "No update available" (der Dienst vergleicht dort
+    installiert gegen neueste, bevor er die Integration fragt).
+    """
+    sitzung_einpflanzen(
+        [
+            herzschlag(),  # Herzschlag beim Richten
+            projekt_antwort(),  # Hinzufuegen: Identitaet klaeren
+            projekt_antwort(),  # Entity-Refresh: Stammdaten ueber die ID
+            releases(releases_objekt("v1.0.0")),  # Entity-Refresh: der Fund
+            releases(releases_objekt("v1.0.0")),  # Flug 2096: der erste Fund reist mit
+            releases(releases_objekt("v1.0.0")),  # M4b: Installationsquelle
+            zip_aufzeichnung("v1.0.0"),  # Installieren -- ohne jeden Takt
+        ]
+    )
+    await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
+    antwort = await frage(
+        client,
+        1,
+        "hacs_lab/hinzufuegen",
+        host=HOST,
+        pfad="foo/bar",
+        kategorie="integration",
+    )
+    assert antwort["success"]
+    await hass.async_block_till_done()
+
+    # Die neueste Version steht GLEICH -- kein Warten auf den Takt.
+    update_ids = hass.states.async_entity_ids("update")
+    assert len(update_ids) == 1
+    zustand = hass.states.get(update_ids[0])
+    assert zustand.attributes["latest_version"] == "1.0.0"
+
+    # Und der Install-Ruf ohne jeden Takt geht durch.
+    await hass.services.async_call(
+        "update", "install", {"entity_id": update_ids[0]}, blocking=True
+    )
+    await hass.async_block_till_done()
+    zustand = hass.states.get(update_ids[0])
+    assert zustand.attributes["installed_version"] == "1.0.0"

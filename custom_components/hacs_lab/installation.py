@@ -221,6 +221,18 @@ def finde_lagerform(archiv: bytes, domain: str) -> str | None:
     return None
 
 
+def _manifest_in_wurzel(namen: list[str]) -> bool:
+    """Liegt eine manifest.json direkt in der Archiv-Wurzel?
+
+    Flache Anhaenge: manche Besitzer zippen den Inhalt von
+    ``custom_components/<domain>/`` ohne jeden Ordner -- HACS nimmt
+    das an, weil die Integration keine Ordnerhuelle braucht, um sich
+    zu erkennen. Die Domain sagt ohnehin die manifest.json, und der
+    Zielname ist laengst aus ihr gelesen.
+    """
+    return any(n == _MANIFEST for n in namen)
+
+
 def _domain_aus_manifest(archiv: bytes) -> str:
     roh = lese_archiv_datei(archiv, _MANIFEST)
     if roh is None:
@@ -282,9 +294,31 @@ def _installiere_sync(
             lagerform = finde_lagerform(archiv, zielname)
             if lagerform is not None:
                 schnitt = zielpfade.Ausschnitt(art="unterordner", unterordner=lagerform)
+            elif _manifest_in_wurzel(namen):
+                # Flacher Anhang (3-System-Test, Flug 2096): keine
+                # Lagerform, keine Ordnerhuelle, aber die Integration
+                # liegt komplett offen da. Die Wurzel IST die Lagerform.
+                schnitt = zielpfade.Ausschnitt(art="wurzel")
         zuordnung = zielpfade.waehle_eintraege(schnitt, namen)
     except zielpfade.ZielpfadFehler as fehlschlag:
-        raise InstallationsFehler(str(fehlschlag)) from fehlschlag
+        # Flug 2096, Wunde B aus dem 3-System-Test: manche hacs.json
+        # nennt einen ``filename`` (ha-powerline: powerline.zip) -- das
+        # ist HACS-Sprech fuer den GEBAUTEN Anhang des Releases. Fehlt
+        # der Anhang, war das Tag-Archiv die Quelle -- und in ihm lebt
+        # die Integration als custom_components/<domain>/ (Lagerform).
+        # Die Integration kommt dann aus dem Ordner statt aus der
+        # Raterei nach einer Datei, die nie im Archiv war. Andere
+        # Kategorien und echte Mehrdeutigkeiten bleiben Fehler.
+        lagerform = (
+            finde_lagerform(archiv, zielname)
+            if kategorie == "integration" and schnitt.art == "dateien"
+            else None
+        )
+        if lagerform is not None:
+            schnitt = zielpfade.Ausschnitt(art="unterordner", unterordner=lagerform)
+            zuordnung = zielpfade.waehle_eintraege(schnitt, namen)
+        else:
+            raise InstallationsFehler(str(fehlschlag)) from fehlschlag
 
     ziel = konfiguration / zielpfade.zielverzeichnis(kategorie, zielname)
     zwischenlager = konfiguration / ZWISCHENLAGER_NAME
