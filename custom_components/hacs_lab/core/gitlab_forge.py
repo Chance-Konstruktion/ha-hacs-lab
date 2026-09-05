@@ -168,6 +168,7 @@ class GitLabForge:
         self,
         topic: str = TOPIC,
         gruppe: str | None = None,
+        stichwort: str | None = None,
         mit_untergruppen: bool = True,
         grenze: int | None = None,
     ) -> list[RepositoryInfo]:
@@ -178,6 +179,10 @@ class GitLabForge:
         # wird, bis die Liste zu Ende ist.
         menge = 100 if grenze is None else max(1, grenze)
         params = {"topic": topic, "per_page": str(menge), "archived": "false"}
+        if stichwort:
+            # GitLab sucht damit in Name und Beschreibung -- das Topic
+            # bleibt als eigene Bedingung daneben scharf.
+            params["search"] = stichwort
         if gruppe:
             url = self.api + "/groups/" + _kodiere(gruppe) + "/projects"
             if mit_untergruppen:

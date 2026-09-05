@@ -177,6 +177,22 @@ async def test_untergruppen_weitergabe():
 
 
 @pytest.mark.asyncio
+async def test_stichwort_weitergabe():
+    """Flug 2091: das Wort der Kopfsuche reist bis zum Anbieter --
+    die Naht gibt es unverstuemmelt weiter."""
+    http = FakeHttp({"/groups/": [projekt()]}, {"hacs.json": GUELTIG})
+    forge = GitLabForge(http, HOST)
+    await entdecke(forge, gruppe="foo", stichwort="bar")
+    params = next(p for url, p in http.aufrufe if "/groups/" in url)
+    assert params.get("search") == "bar"
+
+    http.aufrufe.clear()
+    await entdecke(forge, gruppe="foo")
+    params = next(p for url, p in http.aufrufe if "/groups/" in url)
+    assert "search" not in params
+
+
+@pytest.mark.asyncio
 async def test_abnahme_gemischte_gruppe_liefert_genau_die_richtigen():
     """Das Abnahmekriterium aus #6: mit Topic, ohne Topic, mit Topic
     aber ohne hacs.json -- nur der erste ist ein Treffer."""

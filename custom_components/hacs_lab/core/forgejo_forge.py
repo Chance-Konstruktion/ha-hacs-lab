@@ -83,6 +83,14 @@ class ForgejoForge:
 
     provider = FORGEJO
 
+    #: Schaltet, ob die Stichwortsuche den Parameter ``topic=true``
+    #: mitschickt. Gitea (die Schwester, Flug 2088) ehrt ihn und setzt
+    #: ihn; Forgejo ignoriert ihn -- gemessen an codeberg.org, der
+    #: Referenzinstanz -- und laesst ihn weg. Die exakte Filterung auf
+    #: ``topics`` geschieht in beiden Faellen client-seitig; der
+    #: Parameter verschaerft nur die Treffermenge, wo er wirkt.
+    SUCHE_MIT_TOPIC_PARAMETER = False
+
     def __init__(self, http: HttpClient, host: str) -> None:
         self.http = http
         self.host = host.rstrip("/").removeprefix("https://").removeprefix("http://")
@@ -203,6 +211,7 @@ class ForgejoForge:
         self,
         topic: str = TOPIC,
         gruppe: str | None = None,
+        stichwort: str | None = None,
         mit_untergruppen: bool = True,
         grenze: int | None = None,
     ) -> list[RepositoryInfo]:
@@ -211,13 +220,16 @@ class ForgejoForge:
         Ohne Gruppe: Stichwort-Suche ueber die Instanz (Themen sind Teil
         des Suchindexes) und danach **exakte** Filterung auf ``topics`` --
         der ``topic``-Parameter der Such-API ist auf Instanzen wie
-        Codeberg wirkungslos, darauf ist kein Verlass.
+        Codeberg wirkungslos, darauf ist kein Verlass. Ein
+        ``stichwort`` tritt als Suchwort an die Stelle des Themennamens;
+        die Themen-Filterung bleibt davon unberuehrt scharf.
 
         Mit Gruppe: Auflistung der Organisation, Rueckfallebene der
-        Benutzer-Listung (404 heisst: das ist keine Organisation).
-        ``mit_untergruppen`` wird angenommen, ist aber ein No-op --
-        Forgejo-Organisationen liegen flach, ein Untergruppen-Endpunkt
-        existiert nicht.
+        Benutzer-Listung (404 heisst: das ist keine Organisation). Ein
+        ``stichwort`` filtert die Liste hier von Hand -- Name und
+        Beschreibung muessen es tragen. ``mit_untergruppen`` wird
+        angenommen, ist aber ein No-op -- Forgejo-Organisationen liegen
+        flach, ein Untergruppen-Endpunkt existiert nicht.
         """
         menge = SEITENGROESSE if grenze is None else max(1, grenze)
         nur_eine = None if grenze is None else 1
@@ -236,10 +248,31 @@ class ForgejoForge:
                     seiten=nur_eine,
                 )
             kandidaten = roh if isinstance(roh, list) else []
+            if stichwort:
+                nadel = stichwort.lower()
+                kandidaten = [
+                    p
+                    for p in kandidaten
+                    if nadel
+                    in (
+                        str(p.get("full_name") or p.get("name") or "")
+                        + " "
+                        + str(p.get("description") or "")
+                    ).lower()
+                ]
         else:
+            suchparameter = {
+                "q": stichwort if stichwort else topic,
+                "limit": str(menge),
+            }
+            if self.SUCHE_MIT_TOPIC_PARAMETER:
+                # Gitea ehrt den Parameter; Forgejo ignoriert ihn. Wo er
+                # wirkt, sucht die Instanz Themen statt Namen -- die
+                # exakte Filterung unten bleibt trotzdem scharf.
+                suchparameter["topic"] = "true"
             antwort = await self._json(
                 self.api + "/repos/search",
-                {"q": topic, "limit": str(menge)},
+                suchparameter,
                 seiten=nur_eine,
             )
             if isinstance(antwort, dict):

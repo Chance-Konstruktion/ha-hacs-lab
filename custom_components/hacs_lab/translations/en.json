@@ -2,10 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect HACS*lab to a GitLab instance",
-        "description": "Address of the GitLab instance. The host is enough; a pasted link is shortened to it. Public instances like gitlab.com work without a token, private ones usually need a read token.",
+        "title": "Connect HACS*lab to an instance",
+        "description": "Address of the instance and its provider. \"auto\" asks the instance itself (two or three small requests) and is right for gitlab.com, codeberg.org, gitea.com, and self-hosted servers alike; pick a named provider if auto-detection cannot decide. The host is enough; a pasted link is shortened to it. Public instances work without a token, private ones usually need a read token.",
         "data": {
-          "host": "Host of the GitLab instance",
+          "host": "Host of the instance",
+          "provider": "Provider (auto = detect)",
           "token": "Access token with read permission (optional)"
         }
       }
@@ -14,13 +15,15 @@
       "token_reicht_nicht": "Token missing or insufficient — {grund}",
       "verbindung_fehlgeschlagen": "Connection failed — {grund}",
       "host_nicht_erreichbar": "Instance unreachable — {grund}",
-      "host_leer": "Please state a host"
+      "host_leer": "Please state a host",
+      "anbieter_unerkannt": "No GitLab, Gitea, or Forgejo answered there — pick the provider by hand — {grund}",
+      "anbieter_unbekannt": "This provider does not exist"
     },
     "abort": {
       "already_configured": "This instance is already set up"
     },
     "create_entry": {
-      "verbunden": "Connected to {host} — {anzahl} projects carry the topic hacs"
+      "verbunden": "Connected to {host} ({anbieter}) — {anzahl} projects carry the topic hacs"
     }
   },
   "options": {

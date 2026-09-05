@@ -684,6 +684,59 @@ async def test_entdecken_ohne_instanz_meldet_klar(
     assert antwort["error"]["code"] == "unbekannte_instanz"
 
 
+async def test_entdecken_reist_mit_stichwort(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
+) -> None:
+    """Flug 2091: die Kopfsuche -- das Wort reist als search-Parameter
+    bis zum Anbieter, die Funde kommen wie gehabt zurueck."""
+    hass_storage["hacs_lab." + HOST.replace(".", "_")] = {
+        "version": 1,
+        "data": {"eintraege": [], "stand": {}},
+    }
+    suche = [
+        projekt_daten(full_name="foo/zigbee"),
+    ]
+    sitzung_einpflanzen(
+        [
+            herzschlag(),  # Richten
+            Aufzeichnung(text=json.dumps(suche), kopfzeilen={}),  # die Suche
+            datei_antwort(json.dumps({"name": "Zigbee"})),
+            releases(releases_objekt("v1.0.0")),
+        ]
+    )
+    await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
+    antwort = await frage(client, 1, "hacs_lab/entdecken", host=HOST, stichwort="zigbee")
+    assert antwort["success"]
+    funde = antwort["result"]["funde"]
+    assert [f["full_name"] for f in funde] == ["foo/zigbee"]
+
+
+async def test_entdecken_ohne_fund_ist_kein_fehler(
+    hass: HomeAssistant, sitzung_einpflanzen, hass_storage, hass_ws_client
+) -> None:
+    """Flug 2091: eine Gruppe, die niemand kennt, zahlt leere Funde --
+    die Kopfsuche darf falsch getippte Worte nicht als Stoerung der
+    Instanz melden."""
+    hass_storage["hacs_lab." + HOST.replace(".", "_")] = {
+        "version": 1,
+        "data": {"eintraege": [], "stand": {}},
+    }
+    sitzung_einpflanzen(
+        [
+            herzschlag(),  # Richten
+            nicht_gefunden(),  # die Gruppe gibt es nicht
+        ]
+    )
+    await richten(hass, mock_eintrag())
+    client = await hass_ws_client(hass)
+
+    antwort = await frage(client, 1, "hacs_lab/entdecken", host=HOST, gruppe="niemand")
+    assert antwort["success"]
+    assert antwort["result"]["funde"] == []
+
+
 # ----------------------------------------------------------------------
 # Detailansicht: README, Releases, Verweise
 

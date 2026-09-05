@@ -9,6 +9,13 @@ DOMAIN = "hacs_lab"
 #: Einstellfelder des Einrichtungsdialogs.
 CONF_HOST = "host"
 CONF_TOKEN = "token"
+CONF_PROVIDER = "provider"
+
+#: Der Wert "auto" im Dialog: die Schmiede soll erkennen, welcher
+#: Anbieter unter der Adresse antwortet (Flug 2088). Die anderen
+#: Werte sind die Namen aus ``core.identity`` -- hier steht nur das
+#: eine Wort, das kein Anbieter ist.
+ANBIETER_AUTO = "auto"
 
 #: Option des Herzschlags: Abstand in Minuten (ROADMAP M2:
 #: "DataUpdateCoordinator mit einstellbarem Abstand").

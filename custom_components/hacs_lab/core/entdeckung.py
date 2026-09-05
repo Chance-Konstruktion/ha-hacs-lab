@@ -65,6 +65,7 @@ async def entdecke(
     forge,
     gruppe: str | None = None,
     topic: str = "hacs",
+    stichwort: str | None = None,
     mit_vorab: bool = False,
     mit_version: bool = True,
     mit_untergruppen: bool = True,
@@ -76,7 +77,9 @@ async def entdecke(
     fuer brauchbare Kandidaten die neueste stabile Version -- auf
     Wunsch ausgespart, wenn der Aufrufer nur zaehlen will. Ohne
     ``gruppe`` wird die ganze Instanz durchsucht; ``mit_untergruppen``
-    gilt nur fuer Gruppensuchen.
+    gilt nur fuer Gruppensuchen. ``stichwort`` engt auf Name und
+    Beschreibung ein -- die Kopfsuche des Ladens reist hier bis zum
+    Anbieter.
 
     Der Scan vertraut der Themensuche nicht blind: Kandidaten ohne das
     eigene Topic oder archivierte Projekte fallen hier noch einmal
@@ -85,7 +88,10 @@ async def entdecke(
     """
     funde: list[Fund] = []
     kandidaten = await forge.suche_nach_topic(
-        topic, gruppe=gruppe, mit_untergruppen=mit_untergruppen
+        topic,
+        gruppe=gruppe,
+        stichwort=stichwort,
+        mit_untergruppen=mit_untergruppen,
     )
     for info in kandidaten:
         if topic not in info.topics or info.archiviert:

@@ -1,10 +1,17 @@
-"""Einrichtungsdialog: Host, optionaler Token, Pruefverbindung.
+"""Einrichtungsdialog: Anbieter, Host, optionaler Token, Pruefverbindung.
+
+Seit Flug 2088 gehoert der Anbieter zur ersten Frage: GitLab, Forgejo
+(Codeberg) oder Gitea -- oder "auto", und die Schmiede erkundet,
+was unter der Adresse antwortet (zwei, hoechstens drei Abrufe, siehe
+``core/schmiede.py``). Der erkannte (oder gewaehlte) Name reist in
+die Eintragsdaten; Eintraege aus der Zeit davor tragen keinen und
+gelten als GitLab -- die einzige Schmiedung, die es damals gab.
 
 Die Pruefung geht durch den echten Weg -- Klient, Forge, Kern -- und
 nicht durch eine Sonderleitung: schlaegt sie fehl, zeigt der Dialog
 genau das, was der Kern zu sagen hat (401/403 → «Token fehlt oder
-reicht nicht», alles andere → Klartext). Ein Stacktrace erreicht den
-Menschen nie.
+reicht nicht», kein erkannter Anbieter → «von Hand waehlen»,
+alles andere → Klartext). Ein Stacktrace erreicht den Menschen nie.
 
 Dafuer eignet sich die Topic-Suche am besten: sie ist dasselbe Mittel,
 mit dem spaeter die Entdeckung laeuft (M6), und sie klappt ohne Token
@@ -30,17 +37,19 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
+    ANBIETER_AUTO,
     CONF_ABSTAND_MINUTEN,
     CONF_HOST,
+    CONF_PROVIDER,
     CONF_TOKEN,
     DOMAIN,
     STANDARD_ABSTAND_MINUTEN,
     host_normalisieren,
 )
 from .core.forge import ForgeFehler, NichtGefunden, RepositoryInfo
-from .core.gitlab_forge import GitLabForge
 from .core.http_aiohttp import AiohttpClient
-from .core.identity import RepositoryIdentity
+from .core.identity import FORGEJO, GITEA, GITLAB, RepositoryIdentity
+from .core.schmiede import AnbieterUnbekannt, erkenne, schmiede
 from .core.validierung import KATEGORIEN
 from .eintraege import (
     CONF_ADRESSE,
@@ -56,28 +65,48 @@ from .eintraege import (
 
 _LOGGER = logging.getLogger(__name__)
 
+#: Die Auswahl des Anbieters im Dialog. Die Marken sind Eigennamen
+#: und brauchen keine Uebersetzung; "auto" ist das Wort der Schmiede
+#: (erkennen statt waehlen) und wird im Beschreibungstext je Sprache
+#: erklaert.
+ANBIETER_WAHL = {
+    ANBIETER_AUTO: "auto",
+    GITLAB: "GitLab",
+    FORGEJO: "Forgejo",
+    GITEA: "Gitea",
+}
+
+#: Die Namen, die der Eintrag tragen darf -- alles andere weist der
+#: Dialog zurueck, bevor es zur Schmiede kommt.
+ANBIETER_NAMEN = frozenset(ANBIETER_WAHL)
+
 
 async def verbindung_pruefen(
-    hass: HomeAssistant, host: str, token: str | None
-) -> list[Any]:
+    hass: HomeAssistant, host: str, token: str | None, anbieter: str = ANBIETER_AUTO
+) -> tuple[list, str]:
     """Ein echter Abruf ueber die Instanz -- beweist Host, API und Token.
 
-    Gelingt er, kommt die Antwort zurueck (der Dialog meldet ihre
-    Groesse). Gelingt er nicht, wirft der Kern seine Fehlerarten -- und
-    genau die werden im Dialog uebersetzt.
+    Gelingt er, kommen die Antwort (der Dialog meldet ihre Groesse)
+    und der Name des Anbieters zurueck, der dieses Tor geformt hat --
+    bei "auto" von der Erkennung geklaert, sonst der gewaehlte.
+    Gelingt er nicht, wirft der Kern seine Fehlerarten -- und genau
+    die werden im Dialog uebersetzt.
     """
     sitzung = async_get_clientsession(hass)
     klient = AiohttpClient(sitzung, token)
-    forge = GitLabForge(klient, host)
+    if anbieter == ANBIETER_AUTO:
+        anbieter = await erkenne(klient, host)
+    forge = schmiede(klient, host, anbieter)
     # Eine Probe, kein Bestandsabruf: hoechstens ein Eintrag, genau
     # eine Seite. Ohne die Grenze holte ein Klick auf "Absenden"
     # gegen eine grosse Instanz im schlimmsten Fall zwanzigtausend
     # Projekte, bevor der Dialog antwortet (Issue #11).
-    return await forge.suche_nach_topic(grenze=1)
+    funde = await forge.suche_nach_topic(grenze=1)
+    return funde, anbieter
 
 
 class HacsLabFluss(config_entries.ConfigFlow, domain=DOMAIN):
-    """Einrichten einer GitLab-Instanz."""
+    """Einrichten einer Instanz -- GitLab, Forgejo oder Gitea."""
 
     VERSION = 1
 
@@ -90,14 +119,22 @@ class HacsLabFluss(config_entries.ConfigFlow, domain=DOMAIN):
         if benutzereingabe is not None:
             host = host_normalisieren(benutzereingabe[CONF_HOST])
             token = (benutzereingabe.get(CONF_TOKEN) or "").strip() or None
+            anbieter = str(benutzereingabe.get(CONF_PROVIDER) or ANBIETER_AUTO)
+            if anbieter not in ANBIETER_NAMEN:
+                fehler["base"] = "anbieter_unbekannt"
             # Die Leerpruefung steht absichtlich VOR dem Verbindungs-
             # versuch: ein leerer Host ist kein Netzfall und darf nie
             # eine Verbindung kosten (Nachschau zu Issue #13).
-            if not host:
+            elif not host:
                 fehler["base"] = "host_leer"
             else:
                 try:
-                    funde = await verbindung_pruefen(self.hass, host, token)
+                    funde, erkannt = await verbindung_pruefen(
+                        self.hass, host, token, anbieter
+                    )
+                except AnbieterUnbekannt as fehlgeschlag:
+                    fehler["base"] = "anbieter_unerkannt"
+                    platzhalter["grund"] = str(fehlgeschlag)
                 except ForgeFehler as fehlgeschlag:
                     fehler["base"] = (
                         "token_reicht_nicht"
@@ -116,11 +153,16 @@ class HacsLabFluss(config_entries.ConfigFlow, domain=DOMAIN):
                     self._abort_if_unique_id_configured()
                     return self.async_create_entry(
                         title=host,
-                        data={CONF_HOST: host, CONF_TOKEN: token or ""},
+                        data={
+                            CONF_HOST: host,
+                            CONF_TOKEN: token or "",
+                            CONF_PROVIDER: erkannt,
+                        },
                         description="verbunden",
                         description_placeholders={
                             "host": host,
                             "anzahl": str(len(funde)),
+                            "anbieter": ANBIETER_WAHL.get(erkannt, erkannt),
                         },
                     )
 
@@ -130,6 +172,10 @@ class HacsLabFluss(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_HOST,
                     default=(benutzereingabe or {}).get(CONF_HOST, "gitlab.com"),
                 ): str,
+                vol.Required(
+                    CONF_PROVIDER,
+                    default=(benutzereingabe or {}).get(CONF_PROVIDER, ANBIETER_AUTO),
+                ): vol.In(ANBIETER_WAHL),
                 vol.Optional(CONF_TOKEN, description={"hint": "token_hint"}): str,
             }
         )

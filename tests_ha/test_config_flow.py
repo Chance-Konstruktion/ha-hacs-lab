@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from datetime import timedelta
 
+import pytest
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -13,6 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.hacs_lab.const import (
     CONF_ABSTAND_MINUTEN,
     CONF_HOST,
+    CONF_PROVIDER,
     CONF_TOKEN,
     DOMAIN,
 )
@@ -42,6 +45,30 @@ def antwort(anzahl: int = 1) -> Aufzeichnung:
     )
 
 
+def forgejo_antwort(anzahl: int = 1) -> Aufzeichnung:
+    """Eine Familien-Suche (API v1), die ``anzahl`` Projekte meldet.
+
+    Gitea wie Forgejo antworten auf ``/repos/search`` mit einem Mantel
+    um die Treffer (``data``) -- nicht mit der nackten Liste wie GitLab.
+    """
+    treffer = {
+        "id": 4711,
+        "full_name": "foo/bar",
+        "description": "ein Testprojekt",
+        "default_branch": "main",
+        "topics": ["hacs"],
+        "stars_count": 7,
+        "open_issues_count": 2,
+        "archived": False,
+        "html_url": "https://gitea.example/foo/bar",
+        "avatar_url": "",
+    }
+    return Aufzeichnung(
+        text=json.dumps({"ok": True, "data": [treffer for _ in range(anzahl)]}),
+        kopfzeilen={},
+    )
+
+
 async def test_dialog_erscheint(hass: HomeAssistant) -> None:
     ergebnis = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
@@ -62,13 +89,17 @@ async def test_verbindung_gelingt(hass: HomeAssistant, sitzung_einpflanzen) -> N
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
 
     assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
     assert ergebnis["title"] == "gitlab.example.net"
-    assert ergebnis["data"] == {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""}
+    assert ergebnis["data"] == {
+        CONF_HOST: "gitlab.example.net",
+        CONF_PROVIDER: "gitlab",
+        CONF_TOKEN: "",
+    }
     assert len(attrappe.abrufe) == 2
     assert attrappe.abrufe[0][0].startswith("https://gitlab.example.net/api/v4/projects")
     # Ohne Token reist keine Berechtigungskopfzeile.
@@ -109,7 +140,7 @@ async def test_probe_holt_hoechstens_eine_seite(
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
 
@@ -131,7 +162,11 @@ async def test_token_reist_als_kopfzeile(
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: "geheimes-ding"},
+        {
+            CONF_HOST: "gitlab.example.net",
+            CONF_PROVIDER: "gitlab",
+            CONF_TOKEN: "geheimes-ding",
+        },
     )
     await hass.async_block_till_done()
 
@@ -149,7 +184,11 @@ async def test_eingefuegter_link_wird_zum_host(
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "https://GitLab.Example.Net/gruppe/projekt", CONF_TOKEN: ""},
+        {
+            CONF_HOST: "https://GitLab.Example.Net/gruppe/projekt",
+            CONF_PROVIDER: "gitlab",
+            CONF_TOKEN: "",
+        },
     )
     await hass.async_block_till_done()
 
@@ -175,7 +214,7 @@ async def test_token_fehlt_gibt_verstaendliche_meldung(
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
 
@@ -193,7 +232,7 @@ async def test_anderer_fehler_gibt_verstaendliche_meldung(
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
 
@@ -209,7 +248,7 @@ async def test_toter_host_gibt_verstaendliche_meldung(
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
 
@@ -224,7 +263,7 @@ async def test_derselbe_host_nur_einmal(hass: HomeAssistant, sitzung_einpflanzen
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
     assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
@@ -235,7 +274,7 @@ async def test_derselbe_host_nur_einmal(hass: HomeAssistant, sitzung_einpflanzen
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
 
@@ -257,7 +296,7 @@ async def dialog_und_eintrag(
     )
     ergebnis = await hass.config_entries.flow.async_configure(
         ergebnis["flow_id"],
-        {CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
     )
     await hass.async_block_till_done()
     mock = hass.config_entries.async_entries(DOMAIN)[0]
@@ -291,7 +330,7 @@ async def test_leerer_host_ohne_verbindung(
         DOMAIN, context={"source": SOURCE_USER}
     )
     ergebnis = await hass.config_entries.flow.async_configure(
-        ergebnis["flow_id"], {CONF_HOST: "", CONF_TOKEN: ""}
+        ergebnis["flow_id"], {CONF_HOST: "", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""}
     )
     await hass.async_block_till_done()
 
@@ -299,6 +338,143 @@ async def test_leerer_host_ohne_verbindung(
     assert ergebnis["errors"] == {"base": "host_leer"}
     # Wichtig ist das NICHT-Geschehene: keine einzige Anfrage.
     assert attrappe.abrufe == []
+
+
+# -- Flug 2088: die Schmiede im Dialog ---------------------------------
+
+
+def version_frage(antwort_text: str) -> Aufzeichnung:
+    """Die Antwort auf eine Versionfrage (``/api/v*/version``)."""
+    return Aufzeichnung(text=json.dumps({"version": antwort_text}), kopfzeilen={})
+
+
+def weg_404() -> Aufzeichnung:
+    """Ein 404, wie jede Forge es auf einen Pfad ohne Tor meldet."""
+    return Aufzeichnung(
+        status=404, text=json.dumps({"message": "404 Not Found"}), kopfzeilen={}
+    )
+
+
+async def test_auto_erkent_gitlab(hass: HomeAssistant, sitzung_einpflanzen) -> None:
+    """auto fragt zuerst die GitLab-Versionfrage -- das offene Tor nennt den Namen."""
+    attrappe = sitzung_einpflanzen(
+        [version_frage("17.9.0"), antwort(), antwort()]  # Erkennung, Probe, Herzschlag
+    )
+
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    ergebnis = await hass.config_entries.flow.async_configure(
+        ergebnis["flow_id"],
+        {CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "auto", CONF_TOKEN: ""},
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+    assert ergebnis["data"][CONF_PROVIDER] == "gitlab"
+    assert attrappe.abrufe[0][0] == "https://gitlab.example.net/api/v4/version"
+    assert len(attrappe.abrufe) == 3
+
+
+async def test_auto_erkent_forgejo(hass: HomeAssistant, sitzung_einpflanzen) -> None:
+    """Forgejo nennt die eigene Nummer (ab v7, 2024) -- die reicht."""
+    attrappe = sitzung_einpflanzen(
+        [weg_404(), version_frage("13.0.1"), forgejo_antwort(), forgejo_antwort()]
+    )
+
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    ergebnis = await hass.config_entries.flow.async_configure(
+        ergebnis["flow_id"],
+        {CONF_HOST: "forgejo.example.net", CONF_PROVIDER: "auto", CONF_TOKEN: ""},
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+    assert ergebnis["data"][CONF_PROVIDER] == "forgejo"
+    # Die Erkennung: Versionfrage GitLab (404), dann Familie (Nummer 13).
+    assert attrappe.abrufe[0][0].endswith("/api/v4/version")
+    assert attrappe.abrufe[1][0] == "https://forgejo.example.net/api/v1/version"
+    # Die Probe lief durch die Forgejo-Schmiede: das Familien-Tor.
+    assert attrappe.abrufe[2][0] == "https://forgejo.example.net/api/v1/repos/search"
+
+
+async def test_auto_erkent_gitea(hass: HomeAssistant, sitzung_einpflanzen) -> None:
+    """Giteas 1.x trennt nichts -- die Startseite nennt den Namen."""
+    attrappe = sitzung_einpflanzen(
+        [
+            weg_404(),
+            version_frage("1.23.8"),
+            Aufzeichnung(
+                rohbytes=b"<html><footer>Powered by Gitea</footer></html>",
+                kopfzeilen={},
+            ),
+            forgejo_antwort(),
+            forgejo_antwort(),
+        ]
+    )
+
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    ergebnis = await hass.config_entries.flow.async_configure(
+        ergebnis["flow_id"],
+        {CONF_HOST: "gitea.example.net", CONF_PROVIDER: "auto", CONF_TOKEN: ""},
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.CREATE_ENTRY
+    assert ergebnis["data"][CONF_PROVIDER] == "gitea"
+    # Das Plaedoyer der Startseite stand zwischen Familie und Probe.
+    assert attrappe.abrufe[2][0] == "https://gitea.example.net/"
+    # Und die Probe lief durch die Gitea-Tochter: sie allein schickt topic=true.
+    url, parameter, _ = attrappe.abrufe[3]
+    assert url == "https://gitea.example.net/api/v1/repos/search"
+    assert parameter.get("topic") == "true"
+
+
+async def test_auto_ohne_anbieter_bittet_um_die_hand(
+    hass: HomeAssistant, sitzung_einpflanzen
+) -> None:
+    """Antwortet dort niemand: der ehrliche Fehler, kein geratenes GitLab."""
+    sitzung_einpflanzen([weg_404(), weg_404()])
+
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    ergebnis = await hass.config_entries.flow.async_configure(
+        ergebnis["flow_id"],
+        {CONF_HOST: "gibts.net.example", CONF_PROVIDER: "auto", CONF_TOKEN: ""},
+    )
+    await hass.async_block_till_done()
+
+    assert ergebnis["type"] is FlowResultType.FORM
+    assert ergebnis["errors"] == {"base": "anbieter_unerkannt"}
+
+
+async def test_unbekannter_anbieter_ist_ein_formfehler(
+    hass: HomeAssistant,
+) -> None:
+    """Ein erfundener Name kommt gar nicht erst in den Schritt.
+
+    Das Formular selbst weisst ihn zurueck (vol.In): die Schmiede
+    sieht ihn nie, das Netz erst recht nicht. Das hier haelt die
+    Auswahl fest, die das Formular anbietet -- auto und die drei
+    Schmieden, und nichts sonst.
+    """
+    ergebnis = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    assert ergebnis["type"] is FlowResultType.FORM
+    schema = ergebnis["data_schema"]
+
+    with pytest.raises(vol.Invalid):
+        schema({"host": "gitea.example.net", "provider": "hub", "token": ""})
+
+    for name in ("auto", "gitlab", "forgejo", "gitea"):
+        gereinigt = schema({"host": "x.example", "provider": name, "token": ""})
+        assert gereinigt["provider"] == name
 
 
 # -- Optionsmenue ------------------------------------------------------
@@ -529,7 +705,7 @@ async def test_repository_entfernen(
     mock = MockConfigEntry(
         domain=DOMAIN,
         title="gitlab.example.net",
-        data={CONF_HOST: "gitlab.example.net", CONF_TOKEN: ""},
+        data={CONF_HOST: "gitlab.example.net", CONF_PROVIDER: "gitlab", CONF_TOKEN: ""},
         unique_id="gitlab.example.net",
     )
     mock.add_to_hass(hass)
