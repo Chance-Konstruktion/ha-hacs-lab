@@ -1,6 +1,6 @@
 # HACS*lab — Der Stand
 
-> Stand: 2026-09-06, Flug 2097 (hacs-lab-intern) — alles Wichtige auf einer Seite.
+> Stand: 2026-09-06, Flug 2098 (hacs-lab-intern) — alles Wichtige auf einer Seite.
 
 ## Das Projekt in einem Satz
 
@@ -12,11 +12,11 @@ installieren, Updates erkennen — ein echtes Produkt für den Imker-Server
 
 | Ort | Inhalt |
 |---|---|
-| `main` (00dbc8a) | Amtssprache Deutsch: README + PROPOSAL + Wiki (MR !32 gemergt) |
-| **MR !33** (offen) | **Die drei Wunden aus dem 3-System-Test** — Zweig `flug-2096-drei-wunden` (b65a08d), Pipeline 4038 GRÜN, `can_be_merged` |
-| **MR !34** (neu, Flug 2097) | **Das Markenbild** — original.png wird das eine Icon (Panel, Avatar) + diese STAND.md |
+| `main` (7b9f82c) | Amtssprache Deutsch + Härte + drei Wunden + Markenbild — MR !31/!32/!33/!34 alle gemergt |
+| **MR !35** (offen, Flug 2098) | **Die Sichtbarkeit installierter Integrationen** — Zustands-Chip je Karte, dauerhafte Benachrichtigung, der Weg zu Geräte & Dienste; Pipeline 4098 GRÜN |
 | Version | manifest `0.2.0`; Release-Tag-Pipeline baut ZIP deterministisch + Paket-Registry |
-| Tests | 340 Kern- (tests/) + 115 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
+| Tests | 361 Kern- (tests/) + 127 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
+| `super-z/ha-bienentanz` | Test-Integration, jetzt **v1.3.0** mit Einrichtungsdialog (Release + Tag) |
 
 ## Was bewiesen ist
 
@@ -24,19 +24,30 @@ installieren, Updates erkennen — ein echtes Produkt für den Imker-Server
   HA 2026.2.3 Kaltstart, ZWEI echte Server (10 GitLab-Funde + 7 Codeberg-Funde),
   bienentanz v1.2.0 sauber installiert, Panel/Fußzeile/Suche/Detail bewiesen
   (Screenshots `flug2095-*.png`).
-- **Die drei Wunden (MR !33)** — aus dem Imker-Praxistest auf 3 Systemen:
-  1. README-Tabellen als Rohtext → Kleinstrenderer (DOMParser, Whitelist, Tabellen-CSS)
-  2. Repos doppelt/dreifach im Laden → _gruppen() prüft vorhanden-Flag + host+full_name: jede Repo genau EIN Gesicht, EIN Platz
-  3. Installation nicht 100 % → drei Heilungen (erster Fund reist mit, flacher ZIP-Anhang, filename-Fallback)
-  E2E-Folter gegen echte Server: **espeasy-p2p ✓ powerline ✓ vistapool ✓ (vorher 0/3)**,
-  Speisetisch 3 installiert + 14 neu ohne Schnitt (Screenshots `flug2096-*.png`).
+- **Die drei Wunden (MR !33, gemergt)** — README-Tabellen als Rohtext, doppelte
+  Gesichter, wackelnde Installationen: alle drei geheilt und auf echter Bühne
+  bewiesen (espeasy-p2p ✓ powerline ✓ vistapool ✓, Screenshots `flug2096-*.png`).
+- **Die Sichtbarkeit (MR !35, Flug 2098)** — der Imker-Befund «installierte Repos
+  unter Geräte & Dienste nicht zu finden» ist vollständig seziert und geheilt:
+  1. **Physik:** HA scannt `custom_components` erst beim Start; die Karte unter
+     Geräte & Dienste entsteht erst durch den Konfigurationseintrag; Integrationen
+     ohne `config_flow` (bienentanz v1.2.0!) können dort PRINZIPIELL nie erscheinen.
+  2. **Heilung:** Zustands-Chip je Karte (Neustart erforderlich → In Geräte &
+     Dienste einrichten [Knopf] → Eingerichtet; dazu YAML-Weg und Rot fürs
+     Nichtgeladene), dauerhafte Benachrichtigung mit derselben Anleitung,
+     Lager erfährt die Installation sofort (Version + Zielweg).
+  3. **Beweis:** 4 Phasen auf echter Bühne mit 2 Neustarts — v1.2.0 unfindbar
+     (Chip «yaml», die Wurzel), v1.3.0 mit Dialog → Flow läuft → KARTE LEBT →
+     Chip «eingerichtet» (Screenshots `flug2098-1/2/3.png`).
 
 ## Nächste Schritte (Reihenfolge)
 
-1. **MR !33 mergen** → HA neu starten → 3 Systeme erneut wagen.
-2. **MR !34 mergen** (Markenbild + STAND.md) — danach trägt das Panel das neue Icon.
-3. Wenn alle 3 Systeme grün sind: **v0.3.0-Schnitt** (Imker-Entscheidung; Tag-Pipeline
-   baut und veröffentlicht den Release selbst).
+1. **MR !35 mergen** → HA neu starten (panel.js + Kern laden frisch) →
+   installierte Integrationen tragen ihren Chip.
+2. Integrationen, die unter Geräte & Dienste fehlen sollen: prüfen, ob ihre
+   manifest.json `config_flow: true` sagt (sonst YAML-Weg — der Chip sagt es).
+3. Wenn der Praxistest grün bleibt: **v0.3.0-Schnitt** (Imker-Entscheidung;
+   Tag-Pipeline baut und veröffentlicht den Release selbst).
 
 ## ⚠ Termine, die wehtun
 
@@ -46,15 +57,17 @@ installieren, Updates erkennen — ein echtes Produkt für den Imker-Server
 
 ## Arbeitsplatz (Biene)
 
-- `repos/hacs-lab` — Arbeitskopie (Zweig liegt auf `flug-2096-drei-wunden`, sauber)
-- `repos/ha-bienentanz` — Beispiel-Integration für den Laden (v1.2.0)
-- `repos/stock/WABEN.md` — Flugbuch des ganzen Volks
+- `repos/hacs-lab` — Arbeitskopie (Zweig `flug-2098-geraete-sichtbar`, sauber)
+- `repos/ha-bienentanz` — Beispiel-Integration für den Laden (**v1.3.0**, gepusht + Release)
+- `repos/stock/WABEN.md` — Flugbuch des ganzen Volks (WABEN 2106)
 - `e2e/` — echte HA-Testinstanz 2026.2.3 (VENV fällt Sandbox-Resets zum Opfer;
   Neubau: `uv venv --python /usr/bin/python3.13 venv && uv pip install homeassistant==2026.2.3`)
-- `scripts/` — verbliebene Werkzeuge nach dem Aufräumflug (E2E-Treiber, HA-Start/Login)
-- `repos/bienentanz` — NEU: LXM-Multi-Agent-Mesh (Flug 2101, siehe eigenes README dort)
+- `scripts/` — verbliebene Werkzeuge (E2E-Treiber: `e2e_geraete_sichtbar.py`
+  [Phasen eins–vier], `e2e_kalt_2098.py` [Bühne kalt], HA-Start/Login)
+- `repos/bienentanz` — LXM-Multi-Agent-Mesh (Flug 2101/2103, siehe eigenes README dort)
 
 ## Offene Wunden
 
-Keine bekannten Code-Wunden mehr offen — MR !33 heilt alle drei gemeldeten.
-Nächste Erkenntnisse kommen aus dem 3-System-Retest nach dem Merge.
+Keine bekannten Code-Wunden offen. Die gemeldeten drei Praxistest-Wunden sind
+gemergt (!33), die Sichtbarkeits-Wunde liegt in !35 ready. Nächste Erkenntnisse
+kommen aus dem Praxistest nach dem Merge.
