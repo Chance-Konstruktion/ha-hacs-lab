@@ -30,7 +30,7 @@ def test_die_quelle_steht_an_der_wurzel():
     quelle = WURZEL / "original.png"
     assert quelle.exists(), "original.png fehlt an der Wurzel"
     assert _ist_png(quelle)
-    assert quelle.stat().st_size > 500_000, "die Quelle ist das volle Bild (kein Abklatsch)"
+    assert quelle.stat().st_size > 500_000, "die Quelle ist das volle Bild"
 
 
 def test_die_512er_form_ist_die_gleiche_marke():
@@ -61,4 +61,4 @@ def test_die_marke_ersetzt_nicht_die_fusszeile():
     """Der Fusszeilen-Fuchs bleibt Fuchs -- nur die Marke ist das neue Bild."""
     text = PANEL.read_text(encoding="utf-8")
     assert 'tanuki_svg("hl-fuss-tanuki")' in text
-    assert 'hl-logo' in text
+    assert "hl-logo" in text
