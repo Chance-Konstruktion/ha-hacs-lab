@@ -66,6 +66,7 @@ from .eintraege import (
 from .installation import InstallationsFehler, deinstalliere_version
 from .lager import LagerFehler, _entity_id, zeile_aus_fund
 from .neustart import neustart_hinweis
+from .sichtbarkeit import anreichern
 
 if TYPE_CHECKING:
     from homeassistant.components.websocket_api.connection import ActiveConnection
@@ -132,11 +133,17 @@ async def _liste(hass: HomeAssistant) -> dict[str, Any]:
             continue
         if not lager.zeilen and laufzeit.eintraege.alle():
             await lager.live_uebernehmen()
-        zeilen.extend(lager.zeilen)
+        # Flug 2098: Kopien, nicht die Zeilen selbst -- der Zustands-Chip
+        # (Neustart? geladen? eingerichtet?) ist eine Aussage ueber JETZT
+        # und gehoert nicht ins Lager. Die Originale bleiben, wie der
+        # Takt sie schrieb; die Antwort traegt die Wahrheit des Augen-
+        # blicks dazu.
+        zeilen.extend(dict(zeile) for zeile in lager.zeilen)
         funde.extend(lager.funde)
         if lager.aktualisiert_am:
             staende_am[host] = lager.aktualisiert_am
 
+    await anreichern(hass, zeilen)
     return {
         "eintraege": zeilen,
         "funde": funde,
@@ -596,7 +603,7 @@ async def ws_deinstallieren(
         await laufzeit.staende.setzen(schluessel, installiert="", pfad="")
         lager = getattr(laufzeit, "lager", None)
         if lager is not None:
-            await lager.stand_geaendert(schluessel, installiert="")
+            await lager.stand_geaendert(schluessel, installiert="", zielweg="")
         neustart_hinweis(hass, eintrag, stand.installiert, "deinstallation")
         _LOGGER.info(
             "Custom Repository ueber die Oberflaeche deinstalliert: %s",

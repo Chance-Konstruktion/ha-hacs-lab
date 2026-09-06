@@ -145,6 +145,25 @@ const TEXTE = {
       "Nimmt die installierten Dateien weg — bei Integrationen steht der nötige Neustart im Reparatur-Brett.",
     deinstallieren_frage: (name) =>
       `${name} deinstallieren? Die installierten Dateien werden entfernt.`,
+    zustand: {
+      neustart: "Neustart erforderlich",
+      nicht_geladen: "Nicht geladen — Protokoll prüfen",
+      eingerichtet: "Eingerichtet",
+      hinzufuegen: "In Geräte & Dienste einrichten",
+      yaml: "Einrichtung über configuration.yaml",
+      ungewiss: "Weg unbekannt — neu installieren",
+    },
+    zustand_titel: {
+      neustart:
+        "Home Assistant lädt Integrationen erst beim Start — Einstellungen → System → Neu starten",
+      nicht_geladen:
+        "Der Ordner liegt da, aber Home Assistant hat die Integration nicht geladen — das Protokoll (Einstellungen → System → Protokolle) sagt warum",
+      eingerichtet: "Die Integration ist eingerichtet — ihre Karte lebt unter Geräte & Dienste",
+      hinzufuegen:
+        "Öffnet Geräte & Dienste — dort «Integration hinzufügen» wählen und die Domain suchen",
+      yaml: "Diese Integration hat keinen Einrichtungsdialog — „domain:” in die configuration.yaml notieren",
+      ungewiss: "Installiert vor M4b — ohne verzeichneten Weg",
+    },
     fehler: {
       unbekannte_instanz: "Diese Instanz ist nicht (mehr) eingerichtet.",
       nicht_gefunden: "Repository nicht gefunden — Adresse prüfen.",
@@ -223,6 +242,25 @@ const TEXTE = {
       "Takes the installed files away — for integrations the required restart shows up in the repair center.",
     deinstallieren_frage: (name) =>
       `Uninstall ${name}? The installed files will be removed.`,
+    zustand: {
+      neustart: "Restart required",
+      nicht_geladen: "Not loaded — check the log",
+      eingerichtet: "Set up",
+      hinzufuegen: "Set up in Devices & services",
+      yaml: "Setup via configuration.yaml",
+      ungewiss: "Unknown path — install again",
+    },
+    zustand_titel: {
+      neustart:
+        "Home Assistant loads integrations on startup only — Settings → System → Restart",
+      nicht_geladen:
+        "The folder is in place, but Home Assistant did not load the integration — the log (Settings → System → Logs) says why",
+      eingerichtet: "The integration is set up — its card lives under Devices & services",
+      hinzufuegen:
+        "Opens Devices & services — choose “Add integration” there and search for the domain",
+      yaml: "This integration has no setup dialog — put “domain:” into configuration.yaml",
+      ungewiss: "Installed before M4b — no recorded path",
+    },
     fehler: {
       unbekannte_instanz: "This instance is not configured (any more).",
       nicht_gefunden: "Repository not found — check the address.",
@@ -1430,6 +1468,54 @@ class HacsLabPanel extends HTMLElement {
     return name ? `<span class="hl-anbieter">${fliehe(name)}</span>` : "";
   }
 
+  /**
+   * Der Zustands-Chip einer installierten Integration (Flug 2098).
+   *
+   * Der Befund des Imkers: installierte Repos unter «Geräte & Dienste»
+   * nicht gefunden. Der Chip sagt je Karte, WO die Integration gerade
+   * steht -- Neustart ausstehend, nicht geladen, bereit zum Einrichten
+   * (das ist ein KNOPF, er oeffnet den Dialog), eingerichtet, oder der
+   * YAML-Weg fuer Integrationen ohne Dialog. Was nicht installiert
+   * ist, traegt keinen Chip; was der Server nicht kennt, auch nicht.
+   */
+  _html_zustand(e) {
+    const t = this._t;
+    const i = e.integration;
+    if (!i || !i.zustand) {
+      return "";
+    }
+    const text = t.zustand[i.zustand];
+    const titel = t.zustand_titel[i.zustand] || "";
+    if (!text) {
+      return "";
+    }
+    if (i.zustand === "hinzufuegen") {
+      // Der Weg fuehrt auf die Seite von Geräte & Dienste -- der
+      // Einrichtungsdialog des Frontend laesst sich von aussen nicht
+      // vorbelegen (der Router kuerzt /add?domain= still auf die
+      // Seite, bewiesen in Flug 2098). Der Titel nennt den letzten
+      // Handgriff: dort «Integration hinzufügen» waehlen.
+      return `
+        <button class="hl-zustand hl-zustand-knopf" data-aktion="geraete"
+                title="${fliehe(titel)}">
+          <ha-icon icon="mdi:plus-circle-outline"></ha-icon>
+          <span>${fliehe(text)}</span>
+        </button>`;
+    }
+    const ikonen = {
+      neustart: "mdi:restart",
+      nicht_geladen: "mdi:alert-circle-outline",
+      eingerichtet: "mdi:check-circle-outline",
+      yaml: "mdi:cog-outline",
+      ungewiss: "mdi:help-circle-outline",
+    };
+    return `
+      <span class="hl-zustand hl-zustand-${i.zustand}" title="${fliehe(titel)}">
+        <ha-icon icon="${fliehe(ikonen[i.zustand] || "mdi:help-circle-outline")}"></ha-icon>
+        <span>${fliehe(text)}</span>
+      </span>`;
+  }
+
   _html_zeile_eintrag(e) {
     const t = this._t;
     const update_da = e.neueste && e.installiert !== e.neueste;
@@ -1448,6 +1534,7 @@ class HacsLabPanel extends HTMLElement {
           </div>
           <div class="hl-unterzeile">
             ${versionszeile}
+            ${this._html_zustand(e)}
             <span class="hl-zahlen">
               ${e.sterne !== undefined ? `<span title="${fliehe(String(e.sterne))} ${fliehe(e.sterne === 1 ? t.sterne_ein : t.sterne_viele)}"><ha-icon icon="mdi:star-outline"></ha-icon> ${fliehe(String(e.sterne))}</span>` : ""}
               ${e.offene_tickets !== undefined ? `<span title="${fliehe(t.tickets)}"><ha-icon icon="mdi:alert-circle-outline"></ha-icon> ${fliehe(String(e.offene_tickets))}</span>` : ""}
@@ -1634,6 +1721,11 @@ class HacsLabPanel extends HTMLElement {
           );
           const kategorie = wahl ? wahl.value : "integration";
           this._hinzufuegen(knopf.dataset.host, knopf.dataset.pfad, kategorie);
+        } else if (aktion === "geraete") {
+          // Flug 2098: der zweite Schritt nach dem Neustart -- die
+          // Seite von Geräte & Dienste. Der Einrichtungsdialog selbst
+          // gehoert dem Frontend; die Domain steht im Titel des Knopfs.
+          this._gehe("/config/integrations/dashboard");
         } else if (aktion === "instanz") {
           // Plättchen: zu den Einstellungen der Integration -- dort stehen
           // Abstand, Custom Repositories und Entfernen je Instanz.
@@ -1855,6 +1947,29 @@ const STIL = `
   font-size: 13px; color: var(--secondary-text-color); flex-wrap: wrap; }
 .hl-version.frisch { color: var(--hl-orange); font-weight: 600; }
 .hl-zahlen { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+
+/* -- Der Zustands-Chip (Flug 2098): wo die installierte Integration
+   gerade steht. Gold = Neustart fehlt, Rot = nicht geladen, Grau =
+   YAML-Weg, gestrichelt = Weg ungewiss, Gruen = eingerichtet. Der
+   Chip "hinzufuegen" ist ein Knopf in der Tracht -- er oeffnet den
+   Einrichtungsdialog von Geräte & Dienste mit vorbelegter Domain. */
+.hl-zustand { display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid rgba(127, 127, 127, .4); border-radius: 999px;
+  padding: 1px 10px; font-size: 12px; color: var(--secondary-text-color);
+  flex: 0 0 auto; max-width: 100%; }
+.hl-zustand ha-icon { width: 14px; height: 14px; flex: 0 0 auto; }
+.hl-zustand span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-zustand-neustart { border-color: rgba(252, 163, 38, .65);
+  background: rgba(252, 163, 38, .14); color: var(--primary-text-color); }
+.hl-zustand-nicht_geladen { border-color: rgba(214, 69, 65, .6);
+  background: rgba(214, 69, 65, .1);
+  color: var(--error-color, #db4437); }
+.hl-zustand-eingerichtet { border-color: rgba(76, 175, 80, .55);
+  background: rgba(76, 175, 80, .12); }
+.hl-zustand-yaml, .hl-zustand-ungewiss { border-style: dashed; }
+.hl-zustand-knopf { cursor: pointer; font: inherit; font-weight: 500;
+  background: var(--hl-orange); border-color: var(--hl-orange); color: #fff; }
+.hl-zustand-knopf:hover { background: var(--hl-rot); border-color: var(--hl-rot); }
 .hl-beschreibung { font-size: 13px; color: var(--secondary-text-color);
   padding-top: 6px; }
 .hl-klein-fehler { font-size: 12px; color: var(--error-color, #db4437);
