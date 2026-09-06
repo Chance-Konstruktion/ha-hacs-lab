@@ -77,11 +77,14 @@ Weg der von Hand. Er dauert etwa zwei Minuten.
 > verschlagenen Ordner `hacs_lab/` auf oberster Ebene, den das alte Archiv
 > daneben ablegte. Danach ein aktuelles Archiv entpacken (ein Ordner, Kern
 > inklusive) und neu starten. Seit v0.1.1 trägt die Integration auch ein Icon
-> auf der Einstellungsseite (`mdi:gitlab`); `logo.png` und `original.png` in
-> diesem Repository sind die Marken-Bilder — der dämonische GitLab-Fuchs, der
-> das Home-Assistant-Haus übernimmt: HA-Blau, ein weißes Haus und ein Tanuki
-> in Glutfarben mit brennenden GitLab-Nähten, dessen Krallen sich in die
-> Fassade graben.
+> auf der Einstellungsseite (`mdi:gitlab`); `original.png` in diesem
+> Repository ist **das eine Markenbild** (Flug 2097): der dämonische
+> GitLab-Fuchs, der das Home-Assistant-Haus übernimmt — HA-Blau, ein weißes
+> Haus und ein Tanuki in Glutfarben mit brennenden GitLab-Nähten, dessen
+> Krallen sich in die Fassade graben. `logo.png` ist die quadratische
+> 512er-Form derselben Quelle — für den Projekt-Avatar und später die
+> exe-/Verpackungs-Form; das Panel trägt das Bild eingebettet in Leiste
+> und Ladeseite.
 
 > **Umstieg von v0.1.1?** Entpacke das v0.2.0-Archiv über den alten Ordner und
 > starte neu — gleiches Layout, nichts zu säubern. Neu: Ein Repository im
@@ -231,7 +234,8 @@ zurückgerollt.
 ## Repository-Aufbau
 
 ```
-logo.png, original.png        Marken-Bilder — der GitLab-Fuchs im HA-Haus
+logo.png, original.png        das eine Markenbild — Quelle (original.png) und
+                              512er-Form (logo.png): Panel, Avatar, exe
 hacs.json                     Repository-Konventionen für HACS*lab selbst
 custom_components/hacs_lab/   die Integration — dünne Home-Assistant-Schicht
   manifest.json               Domain, Version, Config-Flow, Icon
