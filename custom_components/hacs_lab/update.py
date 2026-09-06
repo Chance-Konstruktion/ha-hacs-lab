@@ -30,6 +30,7 @@ from .const import DOMAIN
 from .core.aktualisierungen import Fund
 from .installation import InstallationsFehler, installiere_version
 from .neustart import neustart_hinweis
+from .sichtbarkeit import lies_dialog_flag
 
 if TYPE_CHECKING:
     from . import Laufzeit
@@ -102,6 +103,10 @@ class HacsLabUpdateEntity(UpdateEntity):
         self._forge = laufzeit.forge
         self._staende: Staende = laufzeit.staende
         self._eintraege = laufzeit.eintraege
+        # Flug 2098: das Lager der Instanz -- die Installation zieht den
+        # Stand der Zeile nach (symmetrisch zur Deinstallation), damit die
+        # Karte den Zustands-Chip auch OHNE erneuern zeigen kann.
+        self._lager = getattr(laufzeit, "lager", None)
         self._eintrag = eintrag
         self._aktualisierer = aktualisierer
         self._attr_unique_id = eintrag.storage_key
@@ -212,6 +217,12 @@ class HacsLabUpdateEntity(UpdateEntity):
         Stufe M4b: der Zielweg wird mit der Version zusammen verzeichnet
         (ohne Weg keine ehrliche Deinstallation), und bei Integrationen
         landet ein Neustart-Hinweis auf dem Reparatur-Brett.
+
+        Flug 2098: der Hinweis nennt auch den zweiten Schritt -- «Geräte
+        & Dienste» oder configuration.yaml, je nachdem, ob die gerade
+        installierte manifest.json einen Einrichtungsdialog verspricht.
+        Der Flag kommt aus dem Ordner am Ziel, nicht aus dem Archiv:
+        was dort liegt, ist die Wahrheit, die Home Assistant lesen wird.
         """
         fund = self._fund
         if fund is None or fund.fehler is not None or not fund.tag:
@@ -237,8 +248,29 @@ class HacsLabUpdateEntity(UpdateEntity):
             installiert=fund.neueste,
             pfad=str(pfad),
         )
+        # Flug 2098: das Lager zieht nach -- Version UND Zielweg. Ohne
+        # diesen Griff bliebe die Zeile "nichts installiert", bis der
+        # naechste Lauf sie neu baute; die Karte (und ihr Zustands-Chip)
+        # waere eine Erinnerung statt einer Wahrheit.
+        if self._lager is not None:
+            await self._lager.stand_geaendert(
+                self._eintrag.storage_key,
+                installiert=fund.neueste,
+                zielweg=str(pfad),
+            )
         self._schreibe()
-        neustart_hinweis(self.hass, self._eintrag_aktuell, fund.neueste, "installation")
+        mit_dialog = (
+            await lies_dialog_flag(self.hass, str(pfad))
+            if self._eintrag_aktuell.kategorie == "integration"
+            else None
+        )
+        neustart_hinweis(
+            self.hass,
+            self._eintrag_aktuell,
+            fund.neueste,
+            "installation",
+            mit_dialog=mit_dialog,
+        )
         _LOGGER.info(
             "%s auf %s installiert",
             self._eintrag_aktuell.anzeigename,

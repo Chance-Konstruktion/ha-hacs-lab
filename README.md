@@ -175,6 +175,19 @@ Weg der von Hand. Er dauert etwa zwei Minuten.
   Reparatur-Zettel, Home Assistant neu zu starten (Integrationen laden nur
   beim Start); der Zettel verschwindet von selbst, sobald der Neustart
   passiert ist.
+- **Wo die Integration bleibt (Flug 2098):** Installieren reicht nicht —
+  Home Assistant scannt `custom_components` erst beim Start, und die Karte
+  unter *Geräte & Dienste* entsteht erst, wenn du die Integration danach
+  selbst hinzufügst. Der Laden sagt das jetzt in drei Stimmen: jede
+  installierte Integration trägt einen **Zustands-Chip** auf ihrer Karte
+  (Neustart erforderlich / bereit zum Einrichten — ein Knopf, der *Geräte &
+  Dienste* öffnet / eingerichtet / Einrichtung über configuration.yaml /
+  nicht geladen — Protokoll prüfen), die Installation legt eine
+  **dauerhafte Benachrichtigung** mit demselben Rat (denselben Weg, den
+  HACS geht), und der Reparatur-Zettel bleibt, wie er war. Integrationen
+  ohne Einrichtungsdialog (`config_flow: false` in ihrer manifest.json)
+  können unter *Geräte & Dienste* prinzipiell nie erscheinen — der Chip
+  nennt dann den YAML-Weg, statt dich raten zu lassen.
 - **Robuster Bestand:** ein umbenanntes Projekt wird an seiner ID erkannt, und
   der Name folgt still; ein erreichbares, aber verändertes Repository wird
   gemeldet, nie geraten; Diagnosen drucken dein Token nie im Klartext.

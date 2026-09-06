@@ -122,6 +122,11 @@ def zeile_aus_eintrag(
     staende = getattr(laufzeit, "staende", None)
     stand = staende.stand(eintrag.storage_key) if staende is not None else None
     zeile["installiert"] = stand.installiert if stand else ""
+    # Flug 2098: der verzeichnete Zielweg reist mit -- die Sichtbarkeit
+    # (Zustand der Installation: Neustart? geladen? eingerichtet?) liest
+    # ihn, ohne die Ablage selbst zu befragen. Fehlt er, bleibt er leer
+    # -- installiert vor Stufe M4b, der Zustand heisst dann "ungewiss".
+    zeile["zielweg"] = stand.pfad if stand else ""
     if info is not None:
         grund = ""
         zeile.update(
@@ -420,9 +425,19 @@ class Lager(DataUpdateCoordinator[dict[str, Any]]):
                 fund["vorhanden"] = False
         await self._sichern()
 
-    async def stand_geaendert(self, storage_key: str, installiert: str) -> None:
-        """Der Stand einer Zeile zieht nach (Deinstallation, Stufe M4b)."""
+    async def stand_geaendert(
+        self, storage_key: str, installiert: str, zielweg: str | None = None
+    ) -> None:
+        """Der Stand einer Zeile zieht nach (Deinstallation, Stufe M4b).
+
+        Flug 2098: ``zielweg`` None laesst den Weg stehen (Installation
+        kennt ihn, die Deinstallation loescht ihn mit). Beide Felder
+        wandern zusammen -- ein Weg ohne Version waer gelogen, eine
+        Version ohne Weg heisst "ungewiss".
+        """
         for zeile in self.zeilen:
             if zeile.get("storage_key") == storage_key:
                 zeile["installiert"] = installiert
+                if zielweg is not None:
+                    zeile["zielweg"] = zielweg
         await self._sichern()
