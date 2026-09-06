@@ -419,6 +419,55 @@ class TestInstalliereLagerform:
         assert (ziel / "__init__.py").exists()
         assert (ziel / "manifest.json").exists()
 
+    def test_flacher_anhang_manifest_in_der_wurzel(self, tmp_path: Path):
+        """Flug 2096, Wunde 3b aus dem 3-System-Test: der gebaute ZIP-
+        Anhang traegt die Dateien OHNE jeden Ordner -- die manifest.json
+        liegt an der Wurzel (so baut es svasek/homeassistant-vistapool-
+        modbus, und HACS nimmt es an). Die Wurzel IST die Integration."""
+        archiv = _zip(
+            {
+                "__init__.py": b"# flach",
+                "manifest.json": _manifest("vistapool", "1.19.0"),
+                "sensor.py": b"DOMAIN = 'vistapool'",
+                "modbus.py": b"# antrieb",
+            }
+        )
+
+        weg = _installiere_sync(archiv, "integration", "vistapool", tmp_path)
+
+        assert weg == PurePosixPath("custom_components/vistapool")
+        ziel = tmp_path / "custom_components" / "vistapool"
+        assert (ziel / "manifest.json").read_bytes() == _manifest("vistapool", "1.19.0")
+        assert (ziel / "__init__.py").exists()
+        assert (ziel / "sensor.py").exists()
+        assert (ziel / "modbus.py").exists()
+
+    def test_flach_ohne_manifest_bleibt_ein_fehler(self, tmp_path: Path):
+        """Ohne manifest.json an der Wurzel ist und bleibt es Raterei --
+        der ehrliche Fehler steht, nichts wird geschrieben."""
+        archiv = _zip(
+            {
+                "__init__.py": b"# flach ohne zeug",
+                "sensor.py": b"DOMAIN = 'was'",
+            }
+        )
+        with pytest.raises(InstallationsFehler):
+            _installiere_sync(archiv, "integration", "vistapool", tmp_path)
+        assert not any(tmp_path.iterdir())
+
+    def test_flacher_anhang_gilt_nur_bei_integrationen(self, tmp_path: Path) -> None:
+        """Andere Kategorien kennen keine Wurzel-Erkennung -- dort bleibt
+        die Ausschnitt-Regel der hacs.json Herr im Haus (datei-Beispiel)."""
+        archiv = _zip(
+            {
+                "manifest.json": _manifest("vistapool", "1.19.0"),
+                "theme.yaml": b"wunder",
+            }
+        )
+        with pytest.raises(InstallationsFehler):
+            _installiere_sync(archiv, "plugin", "vistapool", tmp_path)
+        assert not (tmp_path / "custom_components").exists()
+
     def test_falsche_lagerform_schreibt_nichts(self, tmp_path: Path):
         archiv = _zip(
             {
@@ -430,3 +479,59 @@ class TestInstalliereLagerform:
         with pytest.raises(InstallationsFehler, match="anderer_name"):
             _installiere_sync(archiv, "integration", "bienentanz", tmp_path)
         assert not any(tmp_path.iterdir())  # kein halber Zustand, gar keiner
+
+
+class TestFilenameOhneAnhang:
+    """Flug 2096, Wunde B: filename in der hacs.json meint den GEBAUTEN
+    Release-Anhang (ha-powerline: powerline.zip). Fehlt der Anhang, ist
+    das Tag-Archiv die Quelle -- und dort lebt die Integration in der
+    Lagerform custom_components/<domain>/."""
+
+    def test_filename_fehlt_im_archiv_lagerform_faellt_ein(self, tmp_path: Path):
+        archiv = _zip(
+            {
+                "ha-powerline-github-v0.2.0/README.md": b"quellstand",
+                "ha-powerline-github-v0.2.0/hacs.json": (
+                    b'{"name": "Powerline", "zip_release": true,'
+                    b' "filename": "powerline.zip"}'
+                ),
+                "ha-powerline-github-v0.2.0/custom_components/powerline/__init__.py": (
+                    b"# strom"
+                ),
+                "ha-powerline-github-v0.2.0/custom_components/powerline/manifest.json": (
+                    _manifest("powerline", "0.2.0")
+                ),
+            }
+        )
+
+        weg = _installiere_sync(archiv, "integration", "powerline", tmp_path)
+
+        assert weg == PurePosixPath("custom_components/powerline")
+        ziel = tmp_path / "custom_components" / "powerline"
+        assert (ziel / "manifest.json").read_bytes() == _manifest("powerline", "0.2.0")
+        assert (ziel / "__init__.py").exists()
+        assert not (ziel / "README.md").exists()
+        assert not (ziel / "hacs.json").exists()
+
+    def test_filename_ohne_lagerform_bleibt_fehler(self, tmp_path: Path):
+        """Keine Lagerform im Archiv: der ehrliche Fehler steht."""
+        archiv = _zip(
+            {
+                "wupp/hacs.json": b'{"filename": "etwas.zip"}',
+                "wupp/anderes/manifest.json": _manifest("powerline"),
+            }
+        )
+        with pytest.raises(InstallationsFehler):
+            _installiere_sync(archiv, "integration", "powerline", tmp_path)
+        assert not any(tmp_path.iterdir())
+
+    def test_dateien_fallback_gilt_nur_bei_integrationen(self, tmp_path: Path):
+        """Bei anderen Kategorien bleibt die Ausschnitt-Regel hart."""
+        archiv = _zip(
+            {
+                "wupp/hacs.json": b'{"filename": "etwas.zip"}',
+                "wupp/theme.yaml": b"farbe",
+            }
+        )
+        with pytest.raises(InstallationsFehler):
+            _installiere_sync(archiv, "theme", "wupp", tmp_path)

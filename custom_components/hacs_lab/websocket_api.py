@@ -52,6 +52,8 @@ from homeassistant.core import HomeAssistant
 
 from .aktualisierer import hole_aktualisierer
 from .const import DOMAIN
+from .core.aktualisierungen import Pruefauftrag
+from .core.aktualisierungen import lauf as kern_lauf
 from .core.entdeckung import entdecke
 from .core.forge import ForgeFehler, NichtGefunden
 from .core.identity import SUFFIX, RepositoryIdentity
@@ -69,6 +71,7 @@ if TYPE_CHECKING:
     from homeassistant.components.websocket_api.connection import ActiveConnection
 
     from . import Laufzeit
+    from .eintraege import Eintrag
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -361,6 +364,52 @@ async def ws_detail(
     )
 
 
+async def _erster_fund(
+    hass: HomeAssistant, laufzeit: Laufzeit, eintrag: Eintrag, pfad: str
+) -> None:
+    """Ein einzelner Pruefauftrag frisch nach dem Aufnehmen (Flug 2096).
+
+    Der Weg fuehrt ueber die Fabrik des Aktualisierers -- sie legt die
+    Spur an, falls noch keine Entity sie je geholt hat, und haengt sie
+    an die Laufzeit. Das Einspeisen geschieht ueber
+    ``async_set_updated_data``: der Bestand wachst um DEN einen Fund,
+    der Rest bleibt stehen, und die Entities hoeren auf den Aufruf wie
+    auf jeden Takt.
+    """
+    config_eintrag = None
+    for entry_id, laufz in hass.data.get(DOMAIN, {}).items():
+        if laufz is laufzeit:
+            config_eintrag = hass.config_entries.async_get_entry(entry_id)
+            break
+    if config_eintrag is None:
+        return
+    aktualisierer = hole_aktualisierer(hass, config_eintrag)
+    if aktualisierer is None:
+        return
+    stand = aktualisierer.staende.stand(eintrag.storage_key)
+    auftrag = Pruefauftrag(
+        schluessel=eintrag.storage_key,
+        pfad=pfad,
+        installiert=stand.installiert,
+        mit_vorabversionen=stand.vorabversionen,
+    )
+    try:
+        funde = await kern_lauf(laufzeit.forge, [auftrag])
+    except Exception as fehlschlag:  # noqa: BLE001 - Zugabe, keine Pflicht
+        _LOGGER.debug(
+            "Erster Fund zu %s gescheitert (der Takt kommt, wie er immer kam): %s",
+            pfad,
+            fehlschlag,
+        )
+        return
+    fund = funde.get(eintrag.storage_key)
+    if fund is None:
+        return
+    bestand = dict(aktualisierer.data or {})
+    bestand[eintrag.storage_key] = fund
+    aktualisierer.async_set_updated_data(bestand)
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -428,6 +477,17 @@ async def ws_hinzufuegen(
     lager = getattr(laufzeit, "lager", None)
     if lager is not None:
         await lager.zeile_hinzu(eintrag, info)
+
+    # Flug 2096, Wunde 3a aus dem 3-System-Test: der erste Fund reist
+    # mit. Ohne ihn bleibt die neueste Version der update-Entity leer
+    # bis zum naechsten Takt -- und ein sofortiger Install-Ruf endet
+    # in Home Assistants "No update available", weil der Dienst dort
+    # installiert gegen neueste vergleicht, BEVOR er uns fragt. Ein
+    # einzelner Auftrag (nicht der ganze Takt) bringt die Antwort in
+    # den Bestand des Aktualisierers; die Entities zeichnen darauf von
+    # selbst neu. Misslingt der Fund (Netz, Rechte), bleibt alles beim
+    # alten -- der Takt kommt, wie er immer kam.
+    await _erster_fund(hass, laufzeit, eintrag, pfad)
     connection.send_result(
         msg["id"],
         {

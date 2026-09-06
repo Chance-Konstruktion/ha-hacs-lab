@@ -121,7 +121,14 @@ Weg der von Hand. Er dauert etwa zwei Minuten.
   because one platform is a single point of failure.”* (das deutsche Design
   bleibt derb: *„Für die Freiheit gebaut — kein GitHub-Monopol-Scheiß.“*) —
   die einzeilige Fusszeile, in deiner Sprache, mit einem Fuchs, der einen
-  kleinen Tanz macht, wenn der Zeiger ihn streichelt.
+  kleinen Tanz macht, wenn der Zeiger ihn streichelt. Die Beschreibung in der
+  Detailansicht ist ein Kleinst-Renderer: Markdown wie gehabt, UND die
+  HTML-Tabellen und der Emojen-Schmuck vieler HACS-READMEs kommen als echte
+  Tabellen ins Bild — hinter einem Whitelist-Sauberer (Skripte, Rahmen und
+  `javascript:`-Adressen fallen ganz weg, Text in den Zellen darf weiter
+  Markdown sein). Jedes Repository steht im Laden GENAU EINMAL: ein Fund, der
+  schon aufgenommen ist, bleibt beim Eintrag — *Installiert/Aktualisierbar*
+  oder *Herunterladbar* oder *Neu*, nie doppelt.
 - **Grenzenlos Server, beliebige Mischung:** jede Instanz ist ein
   Konfigurationseintrag — richte so viele ein, wie du magst, jede mit eigenem
   Anbieter (GitLab, Forgejo, Gitea), Token und Takt. Der Laden zeigt sie alle
@@ -188,13 +195,23 @@ und Forgejo/Codeberg gleichermaßen):
    Repositories mit anderem Layout setzen `content_in_root`, `zip_release`
    oder `filename` — dieselben Konventionen, die HACS etabliert hat.
 3. Veröffentliche Versionen als Releases oder zumindest als Tags. Releases
-   gewinnen; Tags sind der Rückfall. Kein gebautes Artefakt nötig: das
+   gewinnen; Tags sind der Rückfall. Kein gebautes Artefekt nötig: das
    automatisch erzeugte Tag-Archiv genügt — HACS\*lab erkennt den Ordner
    `custom_components/<domain>/` darin und installiert genau diesen
    Teilbaum; Dateien der Repository-Wurzel (README, CI-Konfiguration) bleiben
    außen vor. Ein Release mit gebautem ZIP-Attachment (der Domain-Ordner als
    Wurzel) bleibt die genaueste Lieferform und gewinnt weiterhin, wenn
-   vorhanden.
+   vorhanden. Und drei Formen, die seit dem 3-System-Test ebenfalls gehen:
+
+   - **flache ZIP-Attachments** — der Inhalt von
+     `custom_components/<domain>/` ohne jeden Ordner (so bauen es viele
+     HACS-Repos; die `manifest.json` an der Wurzel genügt als Ausweis),
+   - **`filename` ohne Attachment** — nennt die `hacs.json` eine Datei wie
+     `powerline.zip`, die zum gebauten Release-Anhang gehört, und fehlt der
+     Anhang, fällt die Installation still auf die Lagerform des Tag-Archivs
+     zurück, statt an einer Datei zu scheitern, die nie im Archiv lag,
+   - **Versions-Namen wie `github/260801`** — Tags mit Schrägstrich und
+     Datumscodes sortieren mit und installieren mit.
 
 `hacs-development` als zweites Topic markiert ein Repository als
 Entwicklungs-Zustand — es wird nur gefunden, wenn ausdrücklich danach gesucht
