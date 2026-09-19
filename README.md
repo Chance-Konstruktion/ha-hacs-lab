@@ -1,5 +1,7 @@
 # HACS*lab
 
+> 🇩🇪 Deutsch · [🇬🇧 English](README.en.md)
+
 HACS-Verhalten für selbst gehostete Git-Forges: Home-Assistant-Custom-Components,
 die auf **GitLab**, **Gitea** oder **Forgejo** ([Codeberg](https://codeberg.org))
 leben, hinzufügen, entdecken und aktuell halten — so, wie HACS es für GitHub tut.
@@ -38,11 +40,13 @@ Weg der von Hand. Er dauert etwa zwei Minuten.
 **Schritte**
 
 1. Lade das Release-Archiv `hacs-lab-vX.Y.Z.zip` von der
-   [Release-Seite](https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/releases)
+   [Release-Seite](https://github.com/Chance-Konstruktion/hacs-lab/releases)
    herunter. Die SHA-256 des Archivs steht in jeder Release-Beschreibung —
-   prüfe sie, wenn du magst. Der Archiv-Link zeigt in die Package-Registry
-   dieses GitLab; das Projekt ist intern, der Download braucht also einen
-   Account auf der Instanz.
+   prüfe sie, wenn du magst. Wer einen Account auf
+   `gitlab.schanz.ipv64.net` hat, findet dasselbe Archiv
+   [dort](https://gitlab.schanz.ipv64.net/chance-konstruktion/hacs-lab/-/releases)
+   in der Package-Registry; die Bytes sind dieselben (der Bau ist
+   deterministisch).
 2. Entpacke das Archiv **in dein Home-Assistant-Konfigurationsverzeichnis**
    (das mit der `configuration.yaml`). Das Archiv enthält genau einen Ordner,
    `custom_components/hacs_lab/` — Kern-Bibliothek inklusive. Ein Ordner zum
@@ -313,9 +317,16 @@ Amtssprache (Issue #16). Das Denken wohnt in
 [ROADMAP.md](ROADMAP.md) (Meilensteine M0–M10 mit ihren Abnahmen) und
 [MITARBEIT.md](MITARBEIT.md) (wie man mitarbeitet). Die Schnittstelle für
 einen zweiten Forge-Anbieter — und was HACS selbst dafür übernehmen müsste —
-steht ausgearbeitet in [PROPOSAL.md](PROPOSAL.md). Die englische README und
-das englische Wiki gehören zum späteren GitHub-Auftritt; bis dahin liegen sie
-in der Git-Geschichte dieses Repositories verwahrt.
+steht ausgearbeitet in [PROPOSAL.md](PROPOSAL.md).
+
+**Wo gearbeitet wird.** Entwickelt wird auf dem selbst gehosteten GitLab —
+das ist der Sinn des Projekts — und nach
+[GitHub](https://github.com/Chance-Konstruktion/hacs-lab) gespiegelt, damit
+Fremde das Projekt finden, installieren und Fehler melden können. Auf dem
+GitLab kann sich niemand von außen anmelden, deshalb ist
+**[GitHub der Ort für Fehlerberichte](https://github.com/Chance-Konstruktion/hacs-lab/issues)**.
+Die englische Fassung dieser Seite liegt als [README.en.md](README.en.md)
+daneben.
 
 ## Lizenz
 
