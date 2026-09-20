@@ -39,7 +39,7 @@ by hand. It takes about two minutes.
 **Steps**
 
 1. Download the release archive `hacs-lab-vX.Y.Z.zip` from the
-   [releases page](https://github.com/Chance-Konstruktion/hacs-lab/releases).
+   [releases page](https://github.com/Chance-Konstruktion/ha-hacs-lab/releases).
    The SHA-256 of the archive is part of every release description — verify
    it if you like.
 2. Extract the archive **into your Home Assistant configuration directory**
@@ -71,7 +71,7 @@ by hand. It takes about two minutes.
 > installed and running) and every lane is green, but the version number is
 > honest: interfaces may still move. Bug reports are what the project wants
 > most right now — please open them
-> [on GitHub](https://github.com/Chance-Konstruktion/hacs-lab/issues).
+> [on GitHub](https://github.com/Chance-Konstruktion/ha-hacs-lab/issues).
 
 > **Upgrading from v0.2.0?** Extract the new archive over the old folder and
 > restart — same layout, nothing to clean up.

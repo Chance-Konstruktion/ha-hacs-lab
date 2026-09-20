@@ -158,3 +158,28 @@ def test_abgelehnter_eintrag_faellt_auf(bahn, capsys):
 
     assert main(attrappe) == 1
     assert "GitHub antwortet 403" in capsys.readouterr().err
+
+
+def test_github_repo_sticht_den_projektnamen(bahn, monkeypatch):
+    """Drueben heisst es anders -- das GitLab-Projekt wird nicht umbenannt.
+
+    Das Projekt heisst hier `hacs-lab`, auf GitHub `ha-hacs-lab` (die
+    ha-Familie: ha-powerline, ha-kontinuum, ...). GITHUB_REPO ist die
+    einzige Stelle, an der dieser Unterschied steht -- ohne sie liefe
+    der Release gegen eine Adresse, die es drueben nicht gibt.
+    """
+    monkeypatch.setenv("GITHUB_REPO", "ha-hacs-lab")
+    attrappe = Attrappe(
+        [
+            {
+                "upload_url": "https://uploads.github.com/r/1/assets{?name,label}",
+                "assets": [],
+            },
+            {"browser_download_url": "https://github.com/x/hacs-lab-v0.3.0.zip"},
+        ]
+    )
+
+    assert main(attrappe) == 0
+    assert attrappe.aufrufe[0]["adresse"].endswith(
+        "/repos/Chance-Konstruktion/ha-hacs-lab/releases/tags/v0.3.0"
+    )

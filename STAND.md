@@ -14,7 +14,7 @@ installieren, Updates erkennen — ein echtes Produkt für den Imker-Server
 |---|---|
 | `main` (f642366) | Amtssprache Deutsch + Härte + drei Wunden + Markenbild + Sichtbarkeit — MR !31–!35 alle gemergt |
 | Version | manifest `0.3.0`, **Tag steht noch aus** (letzter Release: v0.1.1); Tag-Pipeline baut ZIP deterministisch + Paket-Registry |
-| Tests | 368 Kern- (tests/) + 127 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
+| Tests | 369 Kern- (tests/) + 127 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
 | `super-z/ha-bienentanz` | Test-Integration, jetzt **v1.3.0** mit Einrichtungsdialog (Release + Tag) |
 
 ## Was bewiesen ist
@@ -67,10 +67,20 @@ fragen“ — dafür fehlten drei Stücke, die jetzt liegen:
   gebaute ZIP an** — das kann die Vorlage in `claude/ci-vorlagen` nicht, sie
   trägt nur ein. Ohne `GITHUB_TOKEN` sagt er das und bleibt grün.
 
-**Was noch Chris' Knopfdruck ist:** das GitHub-Repo anlegen, den Push-Spiegel
-einrichten (wie bei den vierzehn anderen), `GITHUB_TOKEN` als maskierte
-CI-Variable setzen und den Tag `v0.3.0` setzen. Die Tag-Pipeline läuft mit dem
-`CI_JOB_TOKEN` — der abgelaufene Token id 44 betrifft sie nicht.
+**Erledigt am 20.09.2026 — die Kette steht:** Repo
+[Chance-Konstruktion/ha-hacs-lab](https://github.com/Chance-Konstruktion/ha-hacs-lab)
+(öffentlich), Push-Spiegel 16 (nur geschützte Zweige), `GITHUB_TOKEN` maskiert
+und `GITHUB_REPO=ha-hacs-lab` als CI-Variablen, Tag `v0.3.0` gesetzt. Die
+Tag-Pipeline 10836 lief grün durch: ZIP gebaut, GitLab-Release eingetragen,
+GitHub-Release angelegt **mit dem Archiv daran** (136 KB).
+
+**Der Name drüben weicht ab, und das ist Absicht.** Das GitLab-Projekt heißt
+weiter `chance-konstruktion/hacs-lab` — kein Umbenennen im GitLab, so steht es
+in der ROADMAP. Auf GitHub heißt es `ha-hacs-lab`, passend zur ha-Familie
+(ha-powerline, ha-kontinuum, ha-spatial-…). `GITHUB_REPO` ist die einzige
+Stelle, an der dieser Unterschied steht; ein Test hält sie fest. Den Stern
+kann GitHub ohnehin nicht: erlaubt sind dort nur Buchstaben, Ziffern, `.`,
+`-` und `_`.
 
 ## Nächste Schritte (Reihenfolge)
 
