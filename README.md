@@ -1,5 +1,9 @@
 # HACS*lab
 
+<p align="center">
+  <img src="logo.png" alt="HACS*lab — der GitLab-Fuchs übernimmt das Home-Assistant-Haus" width="192">
+</p>
+
 > 🇩🇪 Deutsch · [🇬🇧 English](README.en.md)
 
 HACS-Verhalten für selbst gehostete Git-Forges: Home-Assistant-Custom-Components,
@@ -40,7 +44,7 @@ Weg der von Hand. Er dauert etwa zwei Minuten.
 **Schritte**
 
 1. Lade das Release-Archiv `hacs-lab-vX.Y.Z.zip` von der
-   [Release-Seite](https://github.com/Chance-Konstruktion/hacs-lab/releases)
+   [Release-Seite](https://github.com/Chance-Konstruktion/ha-hacs-lab/releases)
    herunter. Die SHA-256 des Archivs steht in jeder Release-Beschreibung —
    prüfe sie, wenn du magst. Wer einen Account auf
    `gitlab.schanz.ipv64.net` hat, findet dasselbe Archiv
@@ -321,10 +325,10 @@ steht ausgearbeitet in [PROPOSAL.md](PROPOSAL.md).
 
 **Wo gearbeitet wird.** Entwickelt wird auf dem selbst gehosteten GitLab —
 das ist der Sinn des Projekts — und nach
-[GitHub](https://github.com/Chance-Konstruktion/hacs-lab) gespiegelt, damit
+[GitHub](https://github.com/Chance-Konstruktion/ha-hacs-lab) gespiegelt, damit
 Fremde das Projekt finden, installieren und Fehler melden können. Auf dem
 GitLab kann sich niemand von außen anmelden, deshalb ist
-**[GitHub der Ort für Fehlerberichte](https://github.com/Chance-Konstruktion/hacs-lab/issues)**.
+**[GitHub der Ort für Fehlerberichte](https://github.com/Chance-Konstruktion/ha-hacs-lab/issues)**.
 Die englische Fassung dieser Seite liegt als [README.en.md](README.en.md)
 daneben.
 

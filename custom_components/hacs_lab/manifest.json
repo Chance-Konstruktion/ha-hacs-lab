@@ -2,8 +2,8 @@
   "domain": "hacs_lab",
   "name": "HACS*lab",
   "version": "0.3.0",
-  "documentation": "https://github.com/Chance-Konstruktion/hacs-lab",
-  "issue_tracker": "https://github.com/Chance-Konstruktion/hacs-lab/issues",
+  "documentation": "https://github.com/Chance-Konstruktion/ha-hacs-lab",
+  "issue_tracker": "https://github.com/Chance-Konstruktion/ha-hacs-lab/issues",
   "codeowners": [
     "@chance-konstruktion",
     "@super-z"
