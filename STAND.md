@@ -14,7 +14,7 @@ installieren, Updates erkennen — ein echtes Produkt für den Imker-Server
 |---|---|
 | `main` (f642366) | Amtssprache Deutsch + Härte + drei Wunden + Markenbild + Sichtbarkeit — MR !31–!35 alle gemergt |
 | Version | manifest `0.3.0`, **Tag steht noch aus** (letzter Release: v0.1.1); Tag-Pipeline baut ZIP deterministisch + Paket-Registry |
-| Tests | 361 Kern- (tests/) + 127 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
+| Tests | 368 Kern- (tests/) + 127 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
 | `super-z/ha-bienentanz` | Test-Integration, jetzt **v1.3.0** mit Einrichtungsdialog (Release + Tag) |
 
 ## Was bewiesen ist
@@ -59,10 +59,18 @@ fragen“ — dafür fehlten drei Stücke, die jetzt liegen:
   (die GitLab-Package-Registry steht als zweiter Weg daneben, die Bytes sind
   dieselben — der Bau ist deterministisch).
 
+- **Der Release kommt drüben auch an** — neuer Job `github-verkuendigung`
+  (`auslieferung/github_verkuenden.py`, 7 Tests). Die Spiegelung schiebt
+  Commits und Tags, aber ein GitLab-Release ist ein GitLab-Objekt; drüben
+  entstünde daraus nichts, und die README zeigte auf eine Release-Seite ohne
+  das versprochene Archiv. Der Job legt den Eintrag an **und hängt das
+  gebaute ZIP an** — das kann die Vorlage in `claude/ci-vorlagen` nicht, sie
+  trägt nur ein. Ohne `GITHUB_TOKEN` sagt er das und bleibt grün.
+
 **Was noch Chris' Knopfdruck ist:** das GitHub-Repo anlegen, den Push-Spiegel
-einrichten (wie bei den vierzehn anderen) und den Tag `v0.3.0` setzen. Die
-Tag-Pipeline läuft mit dem `CI_JOB_TOKEN` — der abgelaufene Token id 44
-betrifft sie nicht.
+einrichten (wie bei den vierzehn anderen), `GITHUB_TOKEN` als maskierte
+CI-Variable setzen und den Tag `v0.3.0` setzen. Die Tag-Pipeline läuft mit dem
+`CI_JOB_TOKEN` — der abgelaufene Token id 44 betrifft sie nicht.
 
 ## Nächste Schritte (Reihenfolge)
 
