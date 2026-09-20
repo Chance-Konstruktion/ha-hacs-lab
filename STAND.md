@@ -1,6 +1,6 @@
 # HACS*lab — Der Stand
 
-> Stand: 2026-09-06, Flug 2098 (hacs-lab-intern) — alles Wichtige auf einer Seite.
+> Stand: 2026-09-20 (GitHub-Auftritt) — alles Wichtige auf einer Seite.
 
 ## Das Projekt in einem Satz
 
@@ -12,10 +12,9 @@ installieren, Updates erkennen — ein echtes Produkt für den Imker-Server
 
 | Ort | Inhalt |
 |---|---|
-| `main` (7b9f82c) | Amtssprache Deutsch + Härte + drei Wunden + Markenbild — MR !31/!32/!33/!34 alle gemergt |
-| **MR !35** (offen, Flug 2098) | **Die Sichtbarkeit installierter Integrationen** — Zustands-Chip je Karte, dauerhafte Benachrichtigung, der Weg zu Geräte & Dienste; Pipeline 4098 GRÜN |
-| Version | manifest `0.2.0`; Release-Tag-Pipeline baut ZIP deterministisch + Paket-Registry |
-| Tests | 361 Kern- (tests/) + 127 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
+| `main` (f642366) | Amtssprache Deutsch + Härte + drei Wunden + Markenbild + Sichtbarkeit — MR !31–!35 alle gemergt |
+| Version | manifest `0.3.0`, **Tag steht noch aus** (letzter Release: v0.1.1); Tag-Pipeline baut ZIP deterministisch + Paket-Registry |
+| Tests | 368 Kern- (tests/) + 127 HA-Tests (tests_ha/), ruff + Struktur-Wächter in CI |
 | `super-z/ha-bienentanz` | Test-Integration, jetzt **v1.3.0** mit Einrichtungsdialog (Release + Tag) |
 
 ## Was bewiesen ist
@@ -40,20 +39,56 @@ installieren, Updates erkennen — ein echtes Produkt für den Imker-Server
      (Chip «yaml», die Wurzel), v1.3.0 mit Dialog → Flow läuft → KARTE LEBT →
      Chip «eingerichtet» (Screenshots `flug2098-1/2/3.png`).
 
+## Der GitHub-Auftritt (20.09.2026)
+
+M10 sagt „Ein Fremder kann HACS*lab nach der README installieren, ohne zu
+fragen“ — dafür fehlten drei Stücke, die jetzt liegen:
+
+- **[README.en.md](README.en.md)** — die englische Fassung auf heutigem Stand
+  (Flug 2096/2097/2098 eingearbeitet), verlinkt von der deutschen Seite. Die
+  Amtssprache bleibt Deutsch (Issue #16): Bezeichner, Commits und die
+  Denk-Dokumente rühren wir nicht an.
+- **Der Fehlerweg zeigt nach draußen** — `manifest.json` nennt jetzt GitHub
+  als `issue_tracker` und `documentation`. Auf dem GitLab kann sich niemand
+  von außen anmelden (`/users/sign_up` leitet auf den Login), ein
+  Fehlerbericht wäre dort ins Leere gelaufen.
+- **Der Versions-Sprung auf `0.3.0`** — das Manifest sagte `0.2.0`, der
+  letzte Release war aber **v0.1.1**. HACS installiert aus Releases, nicht
+  aus dem Zweig; wer uns drüben findet, hätte alten Code bekommen.
+  Der Download-Weg in beiden READMEs zeigt jetzt auf die GitHub-Releases
+  (die GitLab-Package-Registry steht als zweiter Weg daneben, die Bytes sind
+  dieselben — der Bau ist deterministisch).
+
+- **Der Release kommt drüben auch an** — neuer Job `github-verkuendigung`
+  (`auslieferung/github_verkuenden.py`, 7 Tests). Die Spiegelung schiebt
+  Commits und Tags, aber ein GitLab-Release ist ein GitLab-Objekt; drüben
+  entstünde daraus nichts, und die README zeigte auf eine Release-Seite ohne
+  das versprochene Archiv. Der Job legt den Eintrag an **und hängt das
+  gebaute ZIP an** — das kann die Vorlage in `claude/ci-vorlagen` nicht, sie
+  trägt nur ein. Ohne `GITHUB_TOKEN` sagt er das und bleibt grün.
+
+**Was noch Chris' Knopfdruck ist:** das GitHub-Repo anlegen, den Push-Spiegel
+einrichten (wie bei den vierzehn anderen), `GITHUB_TOKEN` als maskierte
+CI-Variable setzen und den Tag `v0.3.0` setzen. Die Tag-Pipeline läuft mit dem
+`CI_JOB_TOKEN` — der abgelaufene Token id 44 betrifft sie nicht.
+
 ## Nächste Schritte (Reihenfolge)
 
-1. **MR !35 mergen** → HA neu starten (panel.js + Kern laden frisch) →
-   installierte Integrationen tragen ihren Chip.
+1. ~~MR !35 mergen~~ — erledigt (06.09., Pipeline 4143 grün auf `main`).
 2. Integrationen, die unter Geräte & Dienste fehlen sollen: prüfen, ob ihre
    manifest.json `config_flow: true` sagt (sonst YAML-Weg — der Chip sagt es).
-3. Wenn der Praxistest grün bleibt: **v0.3.0-Schnitt** (Imker-Entscheidung;
-   Tag-Pipeline baut und veröffentlicht den Release selbst).
+3. **v0.3.0-Schnitt** — Manifest steht auf `0.3.0`, der Tag fehlt noch
+   (Imker-Entscheidung; Tag-Pipeline baut und veröffentlicht den Release
+   selbst).
+4. GitHub-Repo + Push-Spiegel, siehe oben.
 
 ## ⚠ Termine, die wehtun
 
-- **GitLab-Token (id 44) stirbt 2026-09-08 — ÜBERMORGEN.** CI, Pages, Issues und
-  alle Pushes hängen daran. Vor Ablauf: neuen Token anlegen, Runner-/CI-Variablen
-  austauschen, alten entziehen.
+- **GitLab-Token (id 44) ist am 2026-09-08 abgelaufen — die Frist ist
+  verstrichen.** Was daran hing, hängt jetzt in der Luft: prüfen und einen
+  neuen Token setzen. **Nicht** betroffen ist die Tag-Pipeline — `auslieferung`
+  und `verkuendigung` laufen mit dem `CI_JOB_TOKEN`, der nur für den einen Lauf
+  gilt. Der Release-Weg ist also frei.
 
 ## Arbeitsplatz (Biene)
 

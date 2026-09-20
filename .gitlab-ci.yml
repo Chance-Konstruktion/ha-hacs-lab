@@ -202,3 +202,24 @@ verkuendigung:
   before_script: []
   script:
     - python -m auslieferung.verkuendigen
+
+# github-verkuendigung traegt denselben Stand auf GitHub ein -- mit dem
+# ZIP daran. GitHub ist die Ladentheke: HACS installiert nur von dort
+# und nur aus Releases. Die Spiegelung schiebt Commits und Tags, aber
+# ein GitLab-Release ist ein GitLab-Objekt; drueben entstuende daraus
+# nichts. Ohne diesen Job zeigte die README auf eine Release-Seite, auf
+# der das versprochene Archiv fehlt.
+#
+# Braucht GITHUB_TOKEN als maskierte CI-Variable (GITHUB_REPO nur, falls
+# das Repo drueben anders heisst). Fehlt das Token, sagt der Job das und
+# bleibt gruen -- das GitLab-Release steht ohnehin.
+github-verkuendigung:
+  stage: auslieferung
+  rules:
+    - if: $CI_COMMIT_TAG
+  needs:
+    - job: auslieferung
+      artifacts: true
+  before_script: []
+  script:
+    - python -m auslieferung.github_verkuenden
