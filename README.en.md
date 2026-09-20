@@ -1,5 +1,9 @@
 # HACS*lab
 
+<p align="center">
+  <img src="logo.png" alt="HACS*lab — the GitLab fox taking over the Home Assistant house" width="192">
+</p>
+
 > 🇬🇧 English · [🇩🇪 Deutsch](README.md)
 
 HACS behaviour for self-hosted Git forges: add, discover, and update Home

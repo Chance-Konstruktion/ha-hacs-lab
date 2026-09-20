@@ -1,5 +1,9 @@
 # HACS*lab
 
+<p align="center">
+  <img src="logo.png" alt="HACS*lab — der GitLab-Fuchs übernimmt das Home-Assistant-Haus" width="192">
+</p>
+
 > 🇩🇪 Deutsch · [🇬🇧 English](README.en.md)
 
 HACS-Verhalten für selbst gehostete Git-Forges: Home-Assistant-Custom-Components,
